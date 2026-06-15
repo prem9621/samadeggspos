@@ -26,11 +26,22 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
     setState(() {
       isLoading = true;
     });
-    final history = await dbHelper.getAllDailyRates();
-    setState(() {
-      rateHistory = history;
-      isLoading = false;
-    });
+    try {
+      final history = await dbHelper.getAllDailyRates();
+      setState(() {
+        rateHistory = history;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load rates: $e')),
+        );
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _showRateDialog() async {
