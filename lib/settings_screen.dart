@@ -30,10 +30,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _backupDatabase() async {
     try {
-      final path = await dbHelper.backupDatabase();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup saved to: $path')),
+          const SnackBar(content: Text('Backup/restore not implemented for Hive yet')),
         );
       }
     } catch (e) {
