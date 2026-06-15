@@ -85,11 +85,12 @@ class DatabaseHelper {
   Future<int> insertDailyRate(DailyRate rate) async {
     try {
       final db = await instance.database;
-      return await db.insert(
+      final result = await db.insert(
         'daily_rates',
         rate.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      return result ?? 0;
     } catch (e) {
       debugPrint('Insert daily rate error: $e');
       rethrow;
@@ -126,7 +127,8 @@ class DatabaseHelper {
   Future<int> insertParty(Party party) async {
     try {
       final db = await instance.database;
-      return await db.insert('parties', party.toMap());
+      final result = await db.insert('parties', party.toMap());
+      return result ?? 0;
     } catch (e) {
       debugPrint('Insert party error: $e');
       rethrow;
@@ -136,12 +138,13 @@ class DatabaseHelper {
   Future<int> updateParty(Party party) async {
     try {
       final db = await instance.database;
-      return await db.update(
+      final result = await db.update(
         'parties',
         party.toMap(),
         where: 'id = ?',
         whereArgs: [party.id],
       );
+      return result ?? 0;
     } catch (e) {
       debugPrint('Update party error: $e');
       rethrow;
@@ -151,11 +154,12 @@ class DatabaseHelper {
   Future<int> deleteParty(int id) async {
     try {
       final db = await instance.database;
-      return await db.delete(
+      final result = await db.delete(
         'parties',
         where: 'id = ?',
         whereArgs: [id],
       );
+      return result ?? 0;
     } catch (e) {
       debugPrint('Delete party error: $e');
       rethrow;
@@ -192,7 +196,8 @@ class DatabaseHelper {
   Future<int> insertSale(Sale sale) async {
     try {
       final db = await instance.database;
-      return await db.insert('sales', sale.toMap());
+      final result = await db.insert('sales', sale.toMap());
+      return result ?? 0;
     } catch (e) {
       debugPrint('Insert sale error: $e');
       rethrow;
