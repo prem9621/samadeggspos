@@ -68,32 +68,32 @@ class _PartiesScreenState extends State<PartiesScreen> {
               children: [
                 TextField(
                   controller: nameController,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Party Name',
                     border: OutlineInputBorder(),
                   ),
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 TextField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Phone Number (Optional)',
                     border: OutlineInputBorder(),
                   ),
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 TextField(
                   controller: addressController,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Address (Optional)',
                     border: OutlineInputBorder(),
                   ),
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: adjustmentType,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Rate Adjustment Type',
                     border: OutlineInputBorder(),
                   ),
@@ -110,128 +110,100 @@ class _PartiesScreenState extends State<PartiesScreen> {
                     }
                   },
                 ),
-                if (adjustmentType != '=')
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: TextField(
-                      controller: adjustmentValueController,
-                      keyboardType: TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: 'Adjustment Value',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: adjustmentValueController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Adjustment Value',
+                    border: OutlineInputBorder(),
                   ),
+                ),
               ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
+                final phone = phoneController.text.trim().isEmpty
+                    ? null
+                    : phoneController.text.trim();
+                final address = addressController.text.trim().isEmpty
+                    ? null
+                    : addressController.text.trim();
+                final adjustmentValue =
+                    double.tryParse(adjustmentValueController.text) ?? 0.0;
+
                 if (name.isEmpty) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(content: Text('Please enter party name')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter a party name')),
+                    );
+                  }
                   return;
                 }
-                final adjustmentValue = double.tryParse(adjustmentValueController.text) ?? 0.0;
+
                 final newParty = Party(
-                  id: party?.id,
                   name: name,
-                  phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
-                  address: addressController.text.trim().isEmpty ? null : addressController.text.trim(),
+                  phone: phone,
+                  address: address,
                   adjustmentType: adjustmentType,
                   adjustmentValue: adjustmentValue,
                 );
 
-                try {
-                  if (party == null) {
-                    await dbHelper.insertParty(newParty);
-                  } else {
-                    await dbHelper.updateParty(newParty);
-                  }
-                } catch (e) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(content: Text('Failed to save party: $e')),
-                  );
-                  return;
+                if (party == null) {
+                  await dbHelper.insertParty(newParty);
+                } else {
+                  // For update, we need to set the new values on the existing party
+                  // Since HiveObject is mutable, but our model is immutable, let's create a new one and replace
+                  await party.delete();
+                  await dbHelper.insertParty(newParty);
                 }
 
-                if (!mounted) return;
-                final messenger = ScaffoldMessenger.of(context);
-                Navigator.pop(dialogContext);
-                _loadParties();
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Party saved successfully')),
-                );
+                if (mounted) {
+                  Navigator.pop(dialogContext);
+                  _loadParties();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        party == null
+                            ? 'Party added successfully!'
+                            : 'Party updated successfully!',
+                      ),
+                    ),
+                  );
+                }
               },
-              child: Text('Save'),
+              child: Text(party == null ? 'Save' : 'Update'),
             ),
           ],
         ),
       ),
     );
-
-    // FIX: dispose dialog controllers after the dialog closes
-    nameController.dispose();
-    phoneController.dispose();
-    addressController.dispose();
-    adjustmentValueController.dispose();
-  }
-
-  Future<void> _deleteParty(Party party) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Delete Party'),
-        content: Text('Are you sure you want to delete ${party.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
-            child: Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      try {
-        await dbHelper.deleteParty(party.id!);
-        _loadParties();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Party deleted')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete party: $e')),
-          );
-        }
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Parties'),
+        title: const Text('Parties'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _showPartyDialog(),
+          ),
+        ],
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : parties.isEmpty
-              ? Center(child: Text('No parties added yet'))
+              ? const Center(child: Text('No parties added yet'))
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: parties.length,
@@ -245,20 +217,41 @@ class _PartiesScreenState extends State<PartiesScreen> {
                           children: [
                             if (party.phone != null) Text('Phone: ${party.phone}'),
                             if (party.address != null) Text('Address: ${party.address}'),
-                            Text('Adjustment: ${party.adjustmentType}${party.adjustmentValue.toStringAsFixed(0)}'),
                           ],
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: Icon(Icons.edit),
+                              icon: const Icon(Icons.edit),
                               onPressed: () => _showPartyDialog(party),
                             ),
                             IconButton(
-                              icon: Icon(Icons.delete),
-                              color: Theme.of(context).colorScheme.error,
-                              onPressed: () => _deleteParty(party),
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete Party'),
+                                    content: const Text('Are you sure you want to delete this party?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, true),
+                                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  await dbHelper.deleteParty(party);
+                                  _loadParties();
+                                }
+                              },
                             ),
                           ],
                         ),
@@ -266,10 +259,6 @@ class _PartiesScreenState extends State<PartiesScreen> {
                     );
                   },
                 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showPartyDialog(),
-        child: Icon(Icons.add),
-      ),
     );
   }
 }

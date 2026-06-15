@@ -33,6 +33,7 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
         isLoading = false;
       });
     } catch (e) {
+      debugPrint('Daily rates load error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to load rates: $e')),
@@ -58,11 +59,11 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Set Today\'s Rate'),
+        title: const Text('Set Today\'s Rate'),
         content: TextField(
           controller: _rateController,
-          keyboardType: TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
             labelText: 'Rate per 100 eggs (₹)',
             border: OutlineInputBorder(),
           ),
@@ -70,14 +71,14 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
               final rate = double.tryParse(_rateController.text);
               if (rate == null || rate <= 0) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Please enter a valid rate')),
+                  const SnackBar(content: Text('Please enter a valid rate')),
                 );
                 return;
               }
@@ -87,10 +88,10 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
               Navigator.pop(context);
               _loadRateHistory();
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Rate saved successfully')),
+                const SnackBar(content: Text('Rate saved successfully')),
               );
             },
-            child: Text('Save'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -101,16 +102,16 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Daily Rate'),
+        title: const Text('Daily Rate'),
         actions: [
           IconButton(
-            icon: Icon(Icons.edit),
+            icon: const Icon(Icons.edit),
             onPressed: _showRateDialog,
           ),
         ],
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: rateHistory.length,
@@ -121,7 +122,7 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
                     title: Text(DateFormat('MMM d, yyyy').format(DateTime.parse(rate.date))),
                     subtitle: Text('₹${rate.baseRate.toStringAsFixed(2)} per 100 eggs'),
                     trailing: rate.date == DateFormat('yyyy-MM-dd').format(DateTime.now())
-                        ? Chip(label: Text('Today'))
+                        ? const Chip(label: Text('Today'))
                         : null,
                   ),
                 );
@@ -129,7 +130,7 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showRateDialog,
-        child: Icon(Icons.edit),
+        child: const Icon(Icons.edit),
       ),
     );
   }

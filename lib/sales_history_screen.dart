@@ -33,7 +33,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       final partyList = await dbHelper.getAllParties();
       List<SaleWithParty> saleList;
       if (selectedPartyFilter != null) {
-        saleList = await dbHelper.getSalesByParty(selectedPartyFilter!.id!);
+        saleList = await dbHelper.getSalesByParty(selectedPartyFilter!);
       } else if (selectedDateFilter != null) {
         final dateStr = DateFormat('yyyy-MM-dd').format(selectedDateFilter!);
         saleList = await dbHelper.getSalesByDate(dateStr);
@@ -81,52 +81,52 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Sales History'),
+        title: const Text('Sales History'),
         actions: [
           PopupMenuButton(
             itemBuilder: (context) => [
               PopupMenuItem(
-                child: ListTile(
+                child: const ListTile(
                   leading: Icon(Icons.date_range),
                   title: Text('Filter by Date'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _selectDate();
-                  },
                 ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _selectDate();
+                },
               ),
               PopupMenuItem(
-                child: ListTile(
+                child: const ListTile(
                   leading: Icon(Icons.group),
                   title: Text('Filter by Party'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showPartyFilterDialog();
-                  },
                 ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showPartyFilterDialog();
+                },
               ),
               PopupMenuItem(
-                child: ListTile(
+                child: const ListTile(
                   leading: Icon(Icons.clear),
                   title: Text('Clear Filters'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    setState(() {
-                      selectedPartyFilter = null;
-                      selectedDateFilter = null;
-                    });
-                    _loadData();
-                  },
                 ),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    selectedPartyFilter = null;
+                    selectedDateFilter = null;
+                  });
+                  _loadData();
+                },
               ),
             ],
           ),
         ],
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : sales.isEmpty
-              ? Center(child: Text('No sales found'))
+              ? const Center(child: Text('No sales found'))
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: sales.length,
@@ -143,7 +143,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                             if (item.sale.notes != null) Text('Note: ${item.sale.notes}'),
                           ],
                         ),
-                        trailing: Text('₹${item.sale.amount.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold)),
+                        trailing: Text('₹${item.sale.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                         onTap: () => _showSaleDetail(item),
                       ),
                     );
@@ -156,7 +156,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Filter by Party'),
+        title: const Text('Filter by Party'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -183,25 +183,25 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Sale Details'),
+        title: const Text('Sale Details'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Party: ${item.party.name}', style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 8),
+              Text('Party: ${item.party.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
               Text('Date: ${DateFormat('MMM d, yyyy').format(DateTime.parse(item.sale.saleDate))}'),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text('Quantity: ${item.sale.eggQuantity.toStringAsFixed(0)} eggs'),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text('Base Rate: ₹${item.sale.baseRate.toStringAsFixed(2)} / 100'),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text('Adjusted Rate: ₹${item.sale.adjustedRate.toStringAsFixed(2)} / 100'),
-              SizedBox(height: 8),
-              Text('Total Amount: ₹${item.sale.amount.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('Total Amount: ₹${item.sale.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
               if (item.sale.notes != null) ...[
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text('Notes: ${item.sale.notes}'),
               ],
             ],
@@ -210,7 +210,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: Text('Close'),
+            child: const Text('Close'),
           ),
         ],
       ),
