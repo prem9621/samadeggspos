@@ -28,21 +28,36 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     setState(() {
       isLoading = true;
     });
-    final partyList = await dbHelper.getAllParties();
-    List<SaleWithParty> saleList;
-    if (selectedPartyFilter != null) {
-      saleList = await dbHelper.getSalesByParty(selectedPartyFilter!.id!);
-    } else if (selectedDateFilter != null) {
-      final dateStr = DateFormat('yyyy-MM-dd').format(selectedDateFilter!);
-      saleList = await dbHelper.getSalesByDate(dateStr);
-    } else {
-      saleList = await dbHelper.getAllSales();
+    try {
+      final partyList = await dbHelper.getAllParties();
+      List<SaleWithParty> saleList;
+      if (selectedPartyFilter != null) {
+        saleList = await dbHelper.getSalesByParty(selectedPartyFilter!.id!);
+      } else if (selectedDateFilter != null) {
+        final dateStr = DateFormat('yyyy-MM-dd').format(selectedDateFilter!);
+        saleList = await dbHelper.getSalesByDate(dateStr);
+      } else {
+        saleList = await dbHelper.getAllSales();
+      }
+      if (!mounted) return;
+      setState(() {
+        parties = partyList;
+        sales = saleList;
+      });
+    } catch (e) {
+      debugPrint('Sales history load error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load sales: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
-    setState(() {
-      parties = partyList;
-      sales = saleList;
-      isLoading = false;
-    });
   }
 
   Future<void> _selectDate() async {
@@ -139,7 +154,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Future<void> _showPartyFilterDialog() async {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Filter by Party'),
         content: SingleChildScrollView(
           child: Column(
@@ -148,7 +163,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 .map((p) => ListTile(
                       title: Text(p.name),
                       onTap: () {
-                        Navigator.pop(context);
+                        Navigator.pop(dialogContext);
                         setState(() {
                           selectedPartyFilter = p;
                           selectedDateFilter = null;
@@ -166,7 +181,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Future<void> _showSaleDetail(SaleWithParty item) async {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Sale Details'),
         content: SingleChildScrollView(
           child: Column(
@@ -193,7 +208,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Close'),
           ),
         ],

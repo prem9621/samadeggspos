@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'main.dart';
 import 'database_helper.dart';
@@ -17,15 +18,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    // FIX: Read from AppState directly instead of SharedPreferences again
-    // AppState already loaded this in main() before runApp
     final appState = context.read<AppState>();
     _shopNameController.text = appState.shopName ?? '';
   }
 
   @override
   void dispose() {
-    // FIX: Always dispose TextEditingController to avoid memory leak
     _shopNameController.dispose();
     super.dispose();
   }
@@ -50,16 +48,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _restoreDatabase() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Restore Database'),
         content: const Text('This will replace current data. Are you sure?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: TextButton.styleFrom(
                 foregroundColor: Theme.of(context).colorScheme.error),
             child: const Text('Restore'),
@@ -133,24 +131,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.backup),
-                  title: const Text('Backup Database'),
-                  onTap: _backupDatabase,
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.restore),
-                  title: const Text('Restore Database'),
-                  onTap: _restoreDatabase,
-                ),
-              ],
+          // FIX: backup/restore use dart:io and don't work on the web build
+          if (!kIsWeb) ...[
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.backup),
+                    title: const Text('Backup Database'),
+                    onTap: _backupDatabase,
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.restore),
+                    title: const Text('Restore Database'),
+                    onTap: _restoreDatabase,
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

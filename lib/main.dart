@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'dashboard_screen.dart';
 import 'daily_rate_screen.dart';
 import 'parties_screen.dart';
@@ -9,10 +12,14 @@ import 'sales_history_screen.dart';
 import 'settings_screen.dart';
 
 void main() async {
-  // FIX: Must call this before any async work in main()
   WidgetsFlutterBinding.ensureInitialized();
 
-  // FIX: Load settings BEFORE runApp so UI has data immediately
+  // FIX: sqflite has no native backend on web — register the
+  // WASM/IndexedDB-based factory before any database call happens.
+  if (kIsWeb) {
+    databaseFactory = databaseFactoryFfiWeb;
+  }
+
   final appState = AppState();
   await appState.loadSettings();
 

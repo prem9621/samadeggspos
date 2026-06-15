@@ -24,11 +24,26 @@ class _PartiesScreenState extends State<PartiesScreen> {
     setState(() {
       isLoading = true;
     });
-    final list = await dbHelper.getAllParties();
-    setState(() {
-      parties = list;
-      isLoading = false;
-    });
+    try {
+      final list = await dbHelper.getAllParties();
+      if (!mounted) return;
+      setState(() {
+        parties = list;
+      });
+    } catch (e) {
+      debugPrint('Parties load error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load parties: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _showPartyDialog([Party? party]) async {
@@ -41,10 +56,10 @@ class _PartiesScreenState extends State<PartiesScreen> {
 
     if (!mounted) return;
 
-    showDialog(
+    await showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           title: Text(party == null ? 'Add Party' : 'Edit Party'),
           content: SingleChildScrollView(
             child: Column(
@@ -111,14 +126,14 @@ class _PartiesScreenState extends State<PartiesScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
                 if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(content: Text('Please enter party name')),
                   );
                   return;
@@ -132,14 +147,25 @@ class _PartiesScreenState extends State<PartiesScreen> {
                   adjustmentType: adjustmentType,
                   adjustmentValue: adjustmentValue,
                 );
-                if (party == null) {
-                  await dbHelper.insertParty(newParty);
-                } else {
-                  await dbHelper.updateParty(newParty);
+
+                try {
+                  if (party == null) {
+                    await dbHelper.insertParty(newParty);
+                  } else {
+                    await dbHelper.updateParty(newParty);
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('Failed to save party: $e')),
+                  );
+                  return;
                 }
-                Navigator.pop(context);
+
+                if (!mounted) return;
+                final messenger = ScaffoldMessenger.of(context);
+                Navigator.pop(dialogContext);
                 _loadParties();
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   SnackBar(content: Text('Party saved successfully')),
                 );
               },
@@ -149,21 +175,27 @@ class _PartiesScreenState extends State<PartiesScreen> {
         ),
       ),
     );
+
+    // FIX: dispose dialog controllers after the dialog closes
+    nameController.dispose();
+    phoneController.dispose();
+    addressController.dispose();
+    adjustmentValueController.dispose();
   }
 
   Future<void> _deleteParty(Party party) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Delete Party'),
         content: Text('Are you sure you want to delete ${party.name}?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
             child: Text('Delete'),
           ),
@@ -171,12 +203,20 @@ class _PartiesScreenState extends State<PartiesScreen> {
       ),
     );
     if (confirm == true) {
-      await dbHelper.deleteParty(party.id!);
-      _loadParties();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Party deleted')),
-        );
+      try {
+        await dbHelper.deleteParty(party.id!);
+        _loadParties();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Party deleted')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete party: $e')),
+          );
+        }
       }
     }
   }

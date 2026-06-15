@@ -39,14 +39,29 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     setState(() {
       isLoading = true;
     });
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final rate = await dbHelper.getDailyRateByDate(today);
-    final partyList = await dbHelper.getAllParties();
-    setState(() {
-      todayRate = rate;
-      parties = partyList;
-      isLoading = false;
-    });
+    try {
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final rate = await dbHelper.getDailyRateByDate(today);
+      final partyList = await dbHelper.getAllParties();
+      if (!mounted) return;
+      setState(() {
+        todayRate = rate;
+        parties = partyList;
+      });
+    } catch (e) {
+      debugPrint('Sale entry load error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load data: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   void _calculateAmount() {
@@ -87,18 +102,27 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       amount: totalAmount,
       notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
     );
-    await dbHelper.insertSale(sale);
-    _quantityController.clear();
-    _notesController.clear();
-    setState(() {
-      selectedParty = null;
-      adjustedRate = 0.0;
-      totalAmount = 0.0;
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sale saved successfully!')),
-      );
+
+    try {
+      await dbHelper.insertSale(sale);
+      _quantityController.clear();
+      _notesController.clear();
+      setState(() {
+        selectedParty = null;
+        adjustedRate = 0.0;
+        totalAmount = 0.0;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sale saved successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save sale: $e')),
+        );
+      }
     }
   }
 

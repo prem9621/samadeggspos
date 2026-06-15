@@ -21,7 +21,6 @@ class DailyRate {
     return DailyRate(
       id: map['id'] as int?,
       date: map['date'] as String,
-      // FIX: SQLite may return int or double, use (as num).toDouble()
       baseRate: (map['base_rate'] as num).toDouble(),
     );
   }
@@ -46,7 +45,6 @@ class Party {
 
   Map<String, dynamic> toMap() {
     return {
-      // Don't include id if null — let SQLite auto-generate it
       if (id != null) 'id': id,
       'name': name,
       'phone': phone,
@@ -63,7 +61,6 @@ class Party {
       phone: map['phone'] as String?,
       address: map['address'] as String?,
       adjustmentType: map['adjustment_type'] as String,
-      // FIX: SQLite returns numeric as int when value is whole number (e.g. 0)
       adjustmentValue: (map['adjustment_value'] as num).toDouble(),
     );
   }
@@ -120,7 +117,6 @@ class Sale {
       id: map['id'] as int?,
       partyId: map['party_id'] as int,
       saleDate: map['sale_date'] as String,
-      // FIX: All numeric fields cast via (as num).toDouble()
       eggQuantity: (map['egg_quantity'] as num).toDouble(),
       baseRate: (map['base_rate'] as num).toDouble(),
       adjustedRate: (map['adjusted_rate'] as num).toDouble(),

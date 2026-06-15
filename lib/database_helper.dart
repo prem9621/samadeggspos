@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'models.dart';
@@ -59,31 +60,6 @@ class DatabaseHelper {
         FOREIGN KEY (party_id) REFERENCES parties (id)
       )
     ''');
-  }
-
-  // FIX: Helper to parse a SaleWithParty from a JOIN row with explicit aliases
-  SaleWithParty _parseSaleWithParty(Map<String, dynamic> map) {
-    final sale = Sale(
-      id: map['s_id'] as int,
-      partyId: map['party_id'] as int,
-      saleDate: map['sale_date'] as String,
-      eggQuantity: (map['egg_quantity'] as num).toDouble(),
-      baseRate: (map['base_rate'] as num).toDouble(),
-      adjustedRate: (map['adjusted_rate'] as num).toDouble(),
-      amount: (map['amount'] as num).toDouble(),
-      notes: map['notes'] as String?,
-    );
-
-    final party = Party(
-      id: map['p_id'] as int,
-      name: map['p_name'] as String,
-      phone: map['phone'] as String?,
-      address: map['address'] as String?,
-      adjustmentType: map['adjustment_type'] as String,
-      adjustmentValue: (map['adjustment_value'] as num).toDouble(),
-    );
-
-    return SaleWithParty(sale: sale, party: party);
   }
 
   Future<int> insertDailyRate(DailyRate rate) async {
@@ -158,89 +134,157 @@ class DatabaseHelper {
     return await db.insert('sales', sale.toMap());
   }
 
-  // FIX: Use explicit column aliases to avoid id/name collision between sales & parties
   Future<List<SaleWithParty>> getAllSales() async {
     final db = await instance.database;
     final result = await db.rawQuery('''
-      SELECT 
-        s.id AS s_id, s.party_id, s.sale_date, s.egg_quantity,
-        s.base_rate, s.adjusted_rate, s.amount, s.notes,
-        p.id AS p_id, p.name AS p_name, p.phone, p.address,
-        p.adjustment_type, p.adjustment_value
-      FROM sales s
+      SELECT s.*, p.* FROM sales s
       JOIN parties p ON s.party_id = p.id
       ORDER BY s.sale_date DESC, s.id DESC
     ''');
 
-    return result.map(_parseSaleWithParty).toList();
+    List<SaleWithParty> salesWithParties = [];
+    for (var map in result) {
+      final sale = Sale(
+        id: map['id'] as int,
+        partyId: map['party_id'] as int,
+        saleDate: map['sale_date'] as String,
+        eggQuantity: (map['egg_quantity'] as num).toDouble(),
+        baseRate: (map['base_rate'] as num).toDouble(),
+        adjustedRate: (map['adjusted_rate'] as num).toDouble(),
+        amount: (map['amount'] as num).toDouble(),
+        notes: map['notes'] as String?,
+      );
+
+      final party = Party(
+        id: map['id:1'] as int,
+        name: map['name'] as String,
+        phone: map['phone'] as String?,
+        address: map['address'] as String?,
+        adjustmentType: map['adjustment_type'] as String,
+        adjustmentValue: (map['adjustment_value'] as num).toDouble(),
+      );
+
+      salesWithParties.add(SaleWithParty(sale: sale, party: party));
+    }
+    return salesWithParties;
   }
 
   Future<List<SaleWithParty>> getSalesByDate(String date) async {
     final db = await instance.database;
     final result = await db.rawQuery('''
-      SELECT 
-        s.id AS s_id, s.party_id, s.sale_date, s.egg_quantity,
-        s.base_rate, s.adjusted_rate, s.amount, s.notes,
-        p.id AS p_id, p.name AS p_name, p.phone, p.address,
-        p.adjustment_type, p.adjustment_value
-      FROM sales s
+      SELECT s.*, p.* FROM sales s
       JOIN parties p ON s.party_id = p.id
       WHERE s.sale_date = ?
       ORDER BY s.id DESC
     ''', [date]);
 
-    return result.map(_parseSaleWithParty).toList();
+    List<SaleWithParty> salesWithParties = [];
+    for (var map in result) {
+      final sale = Sale(
+        id: map['id'] as int,
+        partyId: map['party_id'] as int,
+        saleDate: map['sale_date'] as String,
+        eggQuantity: (map['egg_quantity'] as num).toDouble(),
+        baseRate: (map['base_rate'] as num).toDouble(),
+        adjustedRate: (map['adjusted_rate'] as num).toDouble(),
+        amount: (map['amount'] as num).toDouble(),
+        notes: map['notes'] as String?,
+      );
+
+      final party = Party(
+        id: map['id:1'] as int,
+        name: map['name'] as String,
+        phone: map['phone'] as String?,
+        address: map['address'] as String?,
+        adjustmentType: map['adjustment_type'] as String,
+        adjustmentValue: (map['adjustment_value'] as num).toDouble(),
+      );
+
+      salesWithParties.add(SaleWithParty(sale: sale, party: party));
+    }
+    return salesWithParties;
   }
 
   Future<List<SaleWithParty>> getSalesByParty(int partyId) async {
     final db = await instance.database;
     final result = await db.rawQuery('''
-      SELECT 
-        s.id AS s_id, s.party_id, s.sale_date, s.egg_quantity,
-        s.base_rate, s.adjusted_rate, s.amount, s.notes,
-        p.id AS p_id, p.name AS p_name, p.phone, p.address,
-        p.adjustment_type, p.adjustment_value
-      FROM sales s
+      SELECT s.*, p.* FROM sales s
       JOIN parties p ON s.party_id = p.id
       WHERE s.party_id = ?
       ORDER BY s.sale_date DESC, s.id DESC
     ''', [partyId]);
 
-    return result.map(_parseSaleWithParty).toList();
+    List<SaleWithParty> salesWithParties = [];
+    for (var map in result) {
+      final sale = Sale(
+        id: map['id'] as int,
+        partyId: map['party_id'] as int,
+        saleDate: map['sale_date'] as String,
+        eggQuantity: (map['egg_quantity'] as num).toDouble(),
+        baseRate: (map['base_rate'] as num).toDouble(),
+        adjustedRate: (map['adjusted_rate'] as num).toDouble(),
+        amount: (map['amount'] as num).toDouble(),
+        notes: map['notes'] as String?,
+      );
+
+      final party = Party(
+        id: map['id:1'] as int,
+        name: map['name'] as String,
+        phone: map['phone'] as String?,
+        address: map['address'] as String?,
+        adjustmentType: map['adjustment_type'] as String,
+        adjustmentValue: (map['adjustment_value'] as num).toDouble(),
+      );
+
+      salesWithParties.add(SaleWithParty(sale: sale, party: party));
+    }
+    return salesWithParties;
   }
 
+  // FIX: SUM() can return either int or double depending on the data,
+  // so cast through `num` first and convert to double safely.
   Future<double> getTotalEggsSoldOnDate(String date) async {
     final db = await instance.database;
     final result = await db.rawQuery('''
       SELECT SUM(egg_quantity) as total FROM sales
       WHERE sale_date = ?
     ''', [date]);
-    final total = result.first['total'];
-    return (total as num?)?.toDouble() ?? 0.0;
+    final total = result.first['total'] as num?;
+    return total?.toDouble() ?? 0.0;
   }
 
+  // FIX: same as above — avoid `as double?` cast which throws on int results.
   Future<double> getTotalSalesAmountOnDate(String date) async {
     final db = await instance.database;
     final result = await db.rawQuery('''
       SELECT SUM(amount) as total FROM sales
       WHERE sale_date = ?
     ''', [date]);
-    final total = result.first['total'];
-    return (total as num?)?.toDouble() ?? 0.0;
+    final total = result.first['total'] as num?;
+    return total?.toDouble() ?? 0.0;
   }
 
+  // FIX: file-based backup/restore can't work on web (no dart:io filesystem).
   Future<String> backupDatabase() async {
+    if (kIsWeb) {
+      throw UnsupportedError(
+          'Backup to file is not available on the web version. '
+          'This feature requires the Android/iOS/desktop app.');
+    }
     final dbPath = await getDatabasesPath();
     final sourceFile = File(join(dbPath, 'eggs_pos.db'));
     final externalDir = Directory('/storage/emulated/0/Download');
-    final backupFile = File(join(
-        externalDir.path,
-        'eggs_pos_backup_${DateTime.now().millisecondsSinceEpoch}.db'));
+    final backupFile = File(join(externalDir.path, 'eggs_pos_backup_${DateTime.now().millisecondsSinceEpoch}.db'));
     await sourceFile.copy(backupFile.path);
     return backupFile.path;
   }
 
   Future<void> restoreDatabase(String backupPath) async {
+    if (kIsWeb) {
+      throw UnsupportedError(
+          'Restore from file is not available on the web version. '
+          'This feature requires the Android/iOS/desktop app.');
+    }
     final dbPath = await getDatabasesPath();
     final targetFile = File(join(dbPath, 'eggs_pos.db'));
     final backupFile = File(backupPath);
