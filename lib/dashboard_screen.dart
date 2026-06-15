@@ -29,16 +29,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       isLoading = true;
     });
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final rate = await dbHelper.getDailyRateByDate(today);
-    final eggs = await dbHelper.getTotalEggsSoldOnDate(today);
-    final amount = await dbHelper.getTotalSalesAmountOnDate(today);
-    setState(() {
-      todayRate = rate;
-      totalEggs = eggs;
-      totalAmount = amount;
-      isLoading = false;
-    });
+    try {
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final rate = await dbHelper.getDailyRateByDate(today);
+      final eggs = await dbHelper.getTotalEggsSoldOnDate(today);
+      final amount = await dbHelper.getTotalSalesAmountOnDate(today);
+      setState(() {
+        todayRate = rate;
+        totalEggs = eggs;
+        totalAmount = amount;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load data: $e')),
+        );
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   @override
