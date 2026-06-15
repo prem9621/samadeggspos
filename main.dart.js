@@ -92425,7 +92425,7 @@ case 5:return A.H(null,r)
 case 1:return A.G(p.at(-1),r)}})
 return A.I($async$qf,r)},
 wl(a){return this.asU(a)},
-asU(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j
+asU(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j,i
 var $async$wl=A.K(function(b,c){if(b===1){o.push(c)
 s=p}for(;;)switch(s){case 0:p=4
 s=7
@@ -92433,18 +92433,20 @@ return A.y($.ew().gfU(),$async$wl)
 case 7:n=c
 s=8
 return A.y(J.aN3(n,"daily_rates",A.as(["id",a.a,"date",a.b,"base_rate",a.c],t.N,t.z),B.EP),$async$wl)
-case 8:l=c
-q=l
+case 8:m=c
+k=m
+if(k==null)k=0
+q=k
 s=1
 break
 p=2
 s=6
 break
 case 4:p=3
-j=o.pop()
-m=A.Z(j)
-A.dS().$1("Insert daily rate error: "+A.k(m))
-throw j
+i=o.pop()
+l=A.Z(i)
+A.dS().$1("Insert daily rate error: "+A.k(l))
+throw i
 s=6
 break
 case 3:s=2
@@ -92518,7 +92520,7 @@ case 6:case 1:return A.H(q,r)
 case 2:return A.G(o.at(-1),r)}})
 return A.I($async$ts,r)},
 wm(a){return this.asV(a)},
-asV(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j
+asV(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j,i
 var $async$wm=A.K(function(b,c){if(b===1){o.push(c)
 s=p}for(;;)switch(s){case 0:p=4
 s=7
@@ -92526,18 +92528,20 @@ return A.y($.ew().gfU(),$async$wm)
 case 7:n=c
 s=8
 return A.y(J.aCS(n,"parties",a.wZ()),$async$wm)
-case 8:l=c
-q=l
+case 8:m=c
+k=m
+if(k==null)k=0
+q=k
 s=1
 break
 p=2
 s=6
 break
 case 4:p=3
-j=o.pop()
-m=A.Z(j)
-A.dS().$1("Insert party error: "+A.k(m))
-throw j
+i=o.pop()
+l=A.Z(i)
+A.dS().$1("Insert party error: "+A.k(l))
+throw i
 s=6
 break
 case 3:s=2
@@ -92546,34 +92550,36 @@ case 6:case 1:return A.H(q,r)
 case 2:return A.G(o.at(-1),r)}})
 return A.I($async$wm,r)},
 x6(a){return this.axe(a)},
-axe(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j,i,h,g
+axe(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j,i,h,g,f
 var $async$x6=A.K(function(b,c){if(b===1){o.push(c)
 s=p}for(;;)switch(s){case 0:p=4
 s=7
 return A.y($.ew().gfU(),$async$x6)
 case 7:n=c
-l=n
-k=new A.vw()
-k.a72("parties",a.wZ(),null,"id = ?",[a.a])
-j=k.a
-j===$&&A.a()
-i=k.b
-A.aJr(i)
-if(l.gf4().jO$)A.a5(A.nH("error database_closed",null,null,null))
+k=n
+j=new A.vw()
+j.a72("parties",a.wZ(),null,"id = ?",[a.a])
+i=j.a
+i===$&&A.a()
+h=j.b
+A.aJr(h)
+if(k.gf4().jO$)A.a5(A.nH("error database_closed",null,null,null))
 s=8
-return A.y(A.aGB(l.gf4(),l.gjq(),j,i),$async$x6)
-case 8:l=c
-q=l
+return A.y(A.aGB(k.gf4(),k.gjq(),i,h),$async$x6)
+case 8:m=c
+k=m
+if(k==null)k=0
+q=k
 s=1
 break
 p=2
 s=6
 break
 case 4:p=3
-g=o.pop()
-m=A.Z(g)
-A.dS().$1("Update party error: "+A.k(m))
-throw g
+f=o.pop()
+l=A.Z(f)
+A.dS().$1("Update party error: "+A.k(l))
+throw f
 s=6
 break
 case 3:s=2
@@ -92582,40 +92588,42 @@ case 6:case 1:return A.H(q,r)
 case 2:return A.G(o.at(-1),r)}})
 return A.I($async$x6,r)},
 vG(a){return this.apX(a)},
-apX(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j,i,h,g,f
+apX(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j,i,h,g,f,e
 var $async$vG=A.K(function(b,c){if(b===1){o.push(c)
 s=p}for(;;)switch(s){case 0:p=4
 s=7
 return A.y($.ew().gfU(),$async$vG)
 case 7:n=c
-l=n
-k=[a]
-j=new A.vw()
-A.aBw(k)
-i=new A.ck("")
-i.a="DELETE FROM "
-i.a="DELETE FROM "+A.Jk("parties")
-j.qJ(i," WHERE ","id = ?")
-h=i.a
-j.a=h.charCodeAt(0)==0?h:h
-k=A.h0(k,!0,t.X)
-j.b=k
-h=j.a
-if(l.gf4().jO$)A.a5(A.nH("error database_closed",null,null,null))
+k=n
+j=[a]
+i=new A.vw()
+A.aBw(j)
+h=new A.ck("")
+h.a="DELETE FROM "
+h.a="DELETE FROM "+A.Jk("parties")
+i.qJ(h," WHERE ","id = ?")
+g=h.a
+i.a=g.charCodeAt(0)==0?g:g
+j=A.h0(j,!0,t.X)
+i.b=j
+g=i.a
+if(k.gf4().jO$)A.a5(A.nH("error database_closed",null,null,null))
 s=8
-return A.y(A.aGB(l.gf4(),l.gjq(),h,k),$async$vG)
-case 8:l=c
-q=l
+return A.y(A.aGB(k.gf4(),k.gjq(),g,j),$async$vG)
+case 8:m=c
+k=m
+if(k==null)k=0
+q=k
 s=1
 break
 p=2
 s=6
 break
 case 4:p=3
-f=o.pop()
-m=A.Z(f)
-A.dS().$1("Delete party error: "+A.k(m))
-throw f
+e=o.pop()
+l=A.Z(e)
+A.dS().$1("Delete party error: "+A.k(l))
+throw e
 s=6
 break
 case 3:s=2
@@ -92656,36 +92664,38 @@ case 6:case 1:return A.H(q,r)
 case 2:return A.G(o.at(-1),r)}})
 return A.I($async$nX,r)},
 wn(a){return this.asW(a)},
-asW(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j,i
+asW(a){var s=0,r=A.J(t.S),q,p=2,o=[],n,m,l,k,j,i,h
 var $async$wn=A.K(function(b,c){if(b===1){o.push(c)
 s=p}for(;;)switch(s){case 0:p=4
 s=7
 return A.y($.ew().gfU(),$async$wn)
 case 7:n=c
-l=A.r(t.N,t.z)
-k=a.a
-if(k!=null)l.m(0,"id",k)
-l.m(0,"party_id",a.b)
-l.m(0,"sale_date",a.c)
-l.m(0,"egg_quantity",a.d)
-l.m(0,"base_rate",a.e)
-l.m(0,"adjusted_rate",a.f)
-l.m(0,"amount",a.r)
-l.m(0,"notes",a.w)
+k=A.r(t.N,t.z)
+j=a.a
+if(j!=null)k.m(0,"id",j)
+k.m(0,"party_id",a.b)
+k.m(0,"sale_date",a.c)
+k.m(0,"egg_quantity",a.d)
+k.m(0,"base_rate",a.e)
+k.m(0,"adjusted_rate",a.f)
+k.m(0,"amount",a.r)
+k.m(0,"notes",a.w)
 s=8
-return A.y(J.aCS(n,"sales",l),$async$wn)
-case 8:l=c
-q=l
+return A.y(J.aCS(n,"sales",k),$async$wn)
+case 8:m=c
+k=m
+if(k==null)k=0
+q=k
 s=1
 break
 p=2
 s=6
 break
 case 4:p=3
-i=o.pop()
-m=A.Z(i)
-A.dS().$1("Insert sale error: "+A.k(m))
-throw i
+h=o.pop()
+l=A.Z(h)
+A.dS().$1("Insert sale error: "+A.k(l))
+throw h
 s=6
 break
 case 3:s=2
