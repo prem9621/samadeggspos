@@ -72,12 +72,32 @@ class MyApp extends StatelessWidget {
       title: 'Samad Eggs POS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.amber),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF2563EB),
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
+        cardTheme: CardTheme(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 16,
+            ),
+          ),
+        ),
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.amber, brightness: Brightness.dark),
+            seedColor: const Color(0xFF2563EB), brightness: Brightness.dark),
         useMaterial3: true,
       ),
       themeMode: context.watch<AppState>().darkMode
@@ -96,6 +116,55 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  Widget _buildDrawerItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required int index,
+  }) {
+    final isSelected = context.watch<AppState>().selectedIndex == index;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: ListTile(
+          leading: Icon(
+            icon,
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withOpacity(0.6),
+          ),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withOpacity(0.8),
+            ),
+          ),
+          selected: isSelected,
+          onTap: () {
+            context.read<AppState>().setSelectedIndex(index);
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
+  }
+
   final List<Widget> _screens = [
     const DashboardScreen(),
     const DailyRateScreen(),
@@ -134,101 +203,168 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
       drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+        ),
+        child: Column(
           children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
                 children: [
-                  Text(
-                    context.watch<AppState>().shopName ?? 'Samad Eggs POS',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 32,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.08),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Samad Eggs',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'POS System',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.6),
+                              ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 8),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.dashboard,
+                    title: 'Dashboard',
+                    index: 0,
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.price_change,
+                    title: 'Daily Rate',
+                    index: 1,
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.group,
+                    title: 'Parties',
+                    index: 2,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Divider(),
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.add_shopping_cart,
+                    title: 'New Sale',
+                    index: 3,
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.shopping_bag,
+                    title: 'New Purchase',
+                    index: 4,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Divider(),
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.history,
+                    title: 'Sales History',
+                    index: 5,
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.money_off,
+                    title: 'Expenses',
+                    index: 6,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Divider(),
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.settings,
+                    title: 'Settings',
+                    index: 7,
+                  ),
                 ],
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.dashboard),
-              title: const Text('Dashboard'),
-              selected: context.watch<AppState>().selectedIndex == 0,
-              onTap: () {
-                context.read<AppState>().setSelectedIndex(0);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.price_change),
-              title: const Text('Daily Rate'),
-              selected: context.watch<AppState>().selectedIndex == 1,
-              onTap: () {
-                context.read<AppState>().setSelectedIndex(1);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.group),
-              title: const Text('Parties'),
-              selected: context.watch<AppState>().selectedIndex == 2,
-              onTap: () {
-                context.read<AppState>().setSelectedIndex(2);
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.add_shopping_cart),
-              title: const Text('New Sale'),
-              selected: context.watch<AppState>().selectedIndex == 3,
-              onTap: () {
-                context.read<AppState>().setSelectedIndex(3);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.shopping_bag),
-              title: const Text('New Purchase'),
-              selected: context.watch<AppState>().selectedIndex == 4,
-              onTap: () {
-                context.read<AppState>().setSelectedIndex(4);
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.history),
-              title: const Text('Sales History'),
-              selected: context.watch<AppState>().selectedIndex == 5,
-              onTap: () {
-                context.read<AppState>().setSelectedIndex(5);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.money_off),
-              title: const Text('Expenses'),
-              selected: context.watch<AppState>().selectedIndex == 6,
-              onTap: () {
-                context.read<AppState>().setSelectedIndex(6);
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Settings'),
-              selected: context.watch<AppState>().selectedIndex == 7,
-              onTap: () {
-                context.read<AppState>().setSelectedIndex(7);
-                Navigator.pop(context);
-              },
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.storefront,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'POS System',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        Text(
+                          'v1.0',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.5),
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

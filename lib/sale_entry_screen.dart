@@ -209,7 +209,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<Party>(
-                        value: selectedParty,
+                        initialValue: selectedParty,
                         decoration: const InputDecoration(
                           labelText: 'Select Party',
                           border: OutlineInputBorder(),

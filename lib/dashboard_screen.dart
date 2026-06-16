@@ -97,89 +97,115 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   )
                 : SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(
+                          'Good ${_getGreeting()}',
+                          style:
+                              Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Here\'s what\'s happening today',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyLarge
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.6),
+                              ),
+                        ),
+                        const SizedBox(height: 24),
                         Card(
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
                           child: Padding(
-                            padding: const EdgeInsets.all(20),
+                            padding: const EdgeInsets.all(24),
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  "Today's Rate",
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  todayRate != null
-                                      ? '₹${todayRate!.baseRate.toStringAsFixed(2)} per 100 eggs'
-                                      : 'No rate set for today',
-                                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                        color: todayRate != null
-                                            ? Theme.of(context).colorScheme.primary
-                                            : Theme.of(context).colorScheme.error,
+                                Row(
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary
+                                            .withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
+                                      padding: const EdgeInsets.all(12),
+                                      child: Icon(
+                                        Icons.price_change,
+                                        color:
+                                            Theme.of(context).colorScheme.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Today's Rate",
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            todayRate != null
+                                                ? '₹${todayRate!.baseRate.toStringAsFixed(2)} per 100 eggs'
+                                                : 'No rate set for today',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .headlineSmall
+                                                ?.copyWith(
+                                                  color: todayRate != null
+                                                      ? Theme.of(context)
+                                                          .colorScheme
+                                                          .primary
+                                                      : Theme.of(context)
+                                                          .colorScheme
+                                                          .error,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
                         Row(
                           children: [
                             Expanded(
-                              child: Card(
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        'Eggs Sold',
-                                        style: Theme.of(context).textTheme.titleMedium,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        totalEggs.toStringAsFixed(0),
-                                        style: Theme.of(context).textTheme.headlineSmall,
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              child: _buildStatCard(
+                                context,
+                                icon: Icons.egg,
+                                title: 'Eggs Sold',
+                                value: totalEggs.toStringAsFixed(0),
+                                color: Colors.amber,
                               ),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
-                              child: Card(
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        'Total Revenue',
-                                        style: Theme.of(context).textTheme.titleMedium,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        '₹${totalRevenue.toStringAsFixed(2)}',
-                                        style: Theme.of(context).textTheme.headlineSmall,
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              child: _buildStatCard(
+                                context,
+                                icon: Icons.currency_rupee,
+                                title: 'Total Revenue',
+                                value: '₹${totalRevenue.toStringAsFixed(2)}',
+                                color: Colors.green,
                               ),
                             ),
                           ],
@@ -188,75 +214,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: Card(
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                color: Theme.of(context).colorScheme.errorContainer,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        'Total Expenses',
-                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                              color: Theme.of(context).colorScheme.onErrorContainer,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        '₹${totalExpenses.toStringAsFixed(2)}',
-                                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                              color: Theme.of(context).colorScheme.onErrorContainer,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              child: _buildStatCard(
+                                context,
+                                icon: Icons.money_off,
+                                title: 'Total Expenses',
+                                value: '₹${totalExpenses.toStringAsFixed(2)}',
+                                color: Colors.red,
                               ),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
-                              child: Card(
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                color: Theme.of(context).colorScheme.primaryContainer,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        'Profit',
-                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                              color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        '₹${totalProfit.toStringAsFixed(2)}',
-                                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                              color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              child: _buildStatCard(
+                                context,
+                                icon: Icons.trending_up,
+                                title: 'Profit',
+                                value: '₹${totalProfit.toStringAsFixed(2)}',
+                                color: Colors.blue,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 28),
                         Text(
                           'Quick Actions',
-                          style: Theme.of(context).textTheme.titleLarge,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
+                        const SizedBox(height: 16),
+                        GridView.count(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
                           children: [
                             _QuickActionButton(
                               icon: Icons.price_change,
@@ -273,17 +267,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               },
                             ),
                             _QuickActionButton(
-                              icon: Icons.money_off,
-                              label: 'Add Expense',
+                              icon: Icons.shopping_bag,
+                              label: 'Add Purchase',
                               onTap: () {
-                                context.read<AppState>().setSelectedIndex(5);
+                                context.read<AppState>().setSelectedIndex(4);
                               },
                             ),
                             _QuickActionButton(
-                              icon: Icons.history,
-                              label: 'View History',
+                              icon: Icons.group,
+                              label: 'Parties',
                               onTap: () {
-                                context.read<AppState>().setSelectedIndex(4);
+                                context.read<AppState>().setSelectedIndex(2);
                               },
                             ),
                           ],
@@ -291,6 +285,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ),
                   ),
+      ),
+    );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
+  }
+
+  Widget _buildStatCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String value,
+    required MaterialColor color,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                icon,
+                color: color.shade700,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6),
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: color.shade700,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -309,19 +359,39 @@ class _QuickActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(
-          vertical: 16,
-          horizontal: 20,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(12),
+                child: Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
-      onPressed: onTap,
-      icon: Icon(icon),
-      label: Text(label),
     );
   }
 }

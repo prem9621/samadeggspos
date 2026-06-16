@@ -178,7 +178,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       DropdownButtonFormField<Party>(
-                        value: selectedSupplier,
+                        initialValue: selectedSupplier,
                         decoration: const InputDecoration(
                           labelText: 'Select Supplier',
                           border: OutlineInputBorder(),
