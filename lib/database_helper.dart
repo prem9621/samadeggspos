@@ -1,11 +1,30 @@
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'models.dart';
 import 'package:intl/intl.dart';
+import 'models.dart';
+
+class DatabaseResult<T> {
+  final T? data;
+  final String? error;
+  final bool success;
+
+  DatabaseResult.success(this.data)
+      : error = null,
+        success = true;
+
+  DatabaseResult.failure(this.error)
+      : data = null,
+        success = false;
+}
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   DatabaseHelper._init();
+
+  static const String boxDailyRates = 'dailyRates';
+  static const String boxParties = 'parties';
+  static const String boxSales = 'sales';
+  static const String boxExpenses = 'expenses';
+  static const String boxPayments = 'payments';
 
   static Future<void> init() async {
     await Hive.initFlutter();
@@ -14,228 +33,401 @@ class DatabaseHelper {
     Hive.registerAdapter(SaleAdapter());
     Hive.registerAdapter(ExpenseAdapter());
     Hive.registerAdapter(PaymentAdapter());
-    await Hive.openBox<DailyRate>('dailyRates');
-    await Hive.openBox<Party>('parties');
-    await Hive.openBox<Sale>('sales');
-    await Hive.openBox<Expense>('expenses');
-    await Hive.openBox<Payment>('payments');
+    await Hive.openBox<DailyRate>(boxDailyRates);
+    await Hive.openBox<Party>(boxParties);
+    await Hive.openBox<Sale>(boxSales);
+    await Hive.openBox<Expense>(boxExpenses);
+    await Hive.openBox<Payment>(boxPayments);
   }
 
+  // ------------------------------
   // Daily Rates
+  // ------------------------------
 
-  Future<void> insertDailyRate(DailyRate rate) async {
-    final box = await Hive.openBox<DailyRate>('dailyRates');
-    await box.put(rate.date, rate);
+  Future<DatabaseResult<DailyRate>> insertDailyRate(DailyRate rate) async {
+    try {
+      if (rate.baseRate <= 0) {
+        return DatabaseResult.failure('Rate must be greater than 0');
+      }
+
+      final box = await Hive.openBox<DailyRate>(boxDailyRates);
+      if (box.containsKey(rate.date)) {
+        return DatabaseResult.failure('Rate already exists for this date');
+      }
+
+      await box.put(rate.date, rate);
+      return DatabaseResult.success(rate);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to save rate: $e');
+    }
   }
 
-  Future<DailyRate?> getDailyRateByDate(String date) async {
-    final box = await Hive.openBox<DailyRate>('dailyRates');
-    return box.get(date);
+  Future<DatabaseResult<DailyRate>> updateDailyRate(DailyRate rate) async {
+    try {
+      if (rate.baseRate <= 0) {
+        return DatabaseResult.failure('Rate must be greater than 0');
+      }
+
+      final box = await Hive.openBox<DailyRate>(boxDailyRates);
+      rate.updatedAt = DateTime.now();
+      await box.put(rate.date, rate);
+      return DatabaseResult.success(rate);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to update rate: $e');
+    }
   }
 
-  Future<List<DailyRate>> getAllDailyRates() async {
-    final box = await Hive.openBox<DailyRate>('dailyRates');
-    return box.values.toList()..sort((a, b) => b.date.compareTo(a.date));
+  Future<DatabaseResult<DailyRate?>> getDailyRateByDate(String date) async {
+    try {
+      final box = await Hive.openBox<DailyRate>(boxDailyRates);
+      return DatabaseResult.success(box.get(date));
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load rate: $e');
+    }
   }
 
+  Future<DatabaseResult<List<DailyRate>>> getAllDailyRates() async {
+    try {
+      final box = await Hive.openBox<DailyRate>(boxDailyRates);
+      final list = box.values.toList()..sort((a, b) => b.date.compareTo(a.date));
+      return DatabaseResult.success(list);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load rates: $e');
+    }
+  }
+
+  // ------------------------------
   // Parties
+  // ------------------------------
 
-  Future<void> insertParty(Party party) async {
-    final box = await Hive.openBox<Party>('parties');
-    await box.add(party);
+  Future<DatabaseResult<Party>> insertParty(Party party) async {
+    try {
+      if (party.name.trim().isEmpty) {
+        return DatabaseResult.failure('Party name cannot be empty');
+      }
+
+      final box = await Hive.openBox<Party>(boxParties);
+      for (final existing in box.values) {
+        if (existing.name.toLowerCase().trim() == party.name.toLowerCase().trim()) {
+          return DatabaseResult.failure('Party with this name already exists');
+        }
+      }
+
+      await box.add(party);
+      return DatabaseResult.success(party);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to save party: $e');
+    }
   }
 
-  Future<void> updateParty(Party party) async {
-    await party.save();
+  Future<DatabaseResult<Party>> updateParty(Party party) async {
+    try {
+      if (party.name.trim().isEmpty) {
+        return DatabaseResult.failure('Party name cannot be empty');
+      }
+
+      final box = await Hive.openBox<Party>(boxParties);
+      for (final existing in box.values) {
+        if (existing.key != party.key && existing.name.toLowerCase().trim() == party.name.toLowerCase().trim()) {
+          return DatabaseResult.failure('Party with this name already exists');
+        }
+      }
+
+      party.updatedAt = DateTime.now();
+      await party.save();
+      return DatabaseResult.success(party);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to update party: $e');
+    }
   }
 
-  Future<void> deleteParty(Party party) async {
-    await party.delete();
+  Future<DatabaseResult<void>> deleteParty(Party party) async {
+    try {
+      await party.delete();
+      return DatabaseResult.success(null);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to delete party: $e');
+    }
   }
 
-  Future<List<Party>> getAllParties() async {
-    final box = await Hive.openBox<Party>('parties');
-    return box.values.toList()..sort((a, b) => a.name.compareTo(b.name));
+  Future<DatabaseResult<List<Party>>> getAllParties() async {
+    try {
+      final box = await Hive.openBox<Party>(boxParties);
+      final list = box.values.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return DatabaseResult.success(list);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load parties: $e');
+    }
   }
 
-  Future<List<Party>> searchParties(String query) async {
-    final all = await getAllParties();
-    return all
-        .where((p) => p.name.toLowerCase().contains(query.toLowerCase()))
-        .toList();
+  Future<DatabaseResult<List<Party>>> searchParties(String query) async {
+    try {
+      final result = await getAllParties();
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+
+      final searchLower = query.toLowerCase().trim();
+      final filtered = result.data!.where((p) =>
+          p.name.toLowerCase().contains(searchLower)).toList();
+
+      return DatabaseResult.success(filtered);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to search parties: $e');
+    }
   }
 
+  // ------------------------------
   // Sales
+  // ------------------------------
 
-  Future<void> insertSale(Sale sale) async {
-    final box = await Hive.openBox<Sale>('sales');
-    await box.add(sale);
-  }
-
-  Future<List<SaleWithParty>> getAllSales() async {
-    final saleBox = await Hive.openBox<Sale>('sales');
-    final partyBox = await Hive.openBox<Party>('parties');
-
-    List<SaleWithParty> result = [];
-    for (var sale in saleBox.values) {
-      final party = partyBox.getAt(sale.partyKey);
-      if (party != null) {
-        result.add(SaleWithParty(sale: sale, party: party));
+  Future<DatabaseResult<Sale>> insertSale(Sale sale) async {
+    try {
+      if (sale.eggQuantity <= 0) {
+        return DatabaseResult.failure('Quantity must be greater than 0');
       }
+      if (sale.baseRate <= 0) {
+        return DatabaseResult.failure('Invalid base rate');
+      }
+      if (sale.amount <= 0) {
+        return DatabaseResult.failure('Invalid amount');
+      }
+
+      final box = await Hive.openBox<Sale>(boxSales);
+      await box.add(sale);
+      return DatabaseResult.success(sale);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to save sale: $e');
     }
-    result.sort((a, b) => b.sale.saleDate.compareTo(a.sale.saleDate));
-    return result;
   }
 
-  Future<List<SaleWithParty>> getSalesByDate(String date) async {
-    final all = await getAllSales();
-    return all.where((s) => s.sale.saleDate == date).toList();
+  Future<DatabaseResult<List<SaleWithParty>>> getAllSales() async {
+    try {
+      final saleBox = await Hive.openBox<Sale>(boxSales);
+      final partyBox = await Hive.openBox<Party>(boxParties);
+
+      List<SaleWithParty> result = [];
+      for (final sale in saleBox.values) {
+        final party = partyBox.getAt(sale.partyKey);
+        if (party != null) {
+          result.add(SaleWithParty(sale: sale, party: party));
+        }
+      }
+      result.sort((a, b) => b.sale.createdAt.compareTo(a.sale.createdAt));
+      return DatabaseResult.success(result);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load sales: $e');
+    }
   }
 
-  Future<List<SaleWithParty>> getSalesByParty(Party party) async {
-    final all = await getAllSales();
-    return all.where((s) => s.sale.partyKey == party.key).toList();
+  Future<DatabaseResult<List<SaleWithParty>>> getSalesByDate(String date) async {
+    try {
+      final result = await getAllSales();
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      final filtered = result.data!.where((s) => s.sale.saleDate == date).toList();
+      return DatabaseResult.success(filtered);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load sales: $e');
+    }
   }
 
-  Future<List<SaleWithParty>> getSalesBetweenDates(String startDate, String endDate) async {
-    final all = await getAllSales();
-    return all.where((s) =>
-        s.sale.saleDate.compareTo(startDate) >= 0 &&
-        s.sale.saleDate.compareTo(endDate) <= 0).toList();
+  Future<DatabaseResult<List<SaleWithParty>>> getSalesByParty(Party party) async {
+    try {
+      final result = await getAllSales();
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      final filtered = result.data!.where((s) => s.sale.partyKey == party.key).toList();
+      return DatabaseResult.success(filtered);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load sales: $e');
+    }
   }
 
-  Future<double> getTotalEggsSoldOnDate(String date) async {
-    final sales = await getSalesByDate(date);
-    double total = 0;
-    for (var s in sales) total += s.sale.eggQuantity;
-    return total;
+  Future<DatabaseResult<double>> getTotalEggsSoldOnDate(String date) async {
+    try {
+      final result = await getSalesByDate(date);
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      double total = 0;
+      for (final s in result.data!) {
+        total += s.sale.eggQuantity;
+      }
+      return DatabaseResult.success(total);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to calculate eggs sold: $e');
+    }
   }
 
-  Future<double> getTotalSalesAmountOnDate(String date) async {
-    final sales = await getSalesByDate(date);
-    double total = 0;
-    for (var s in sales) total += s.sale.amount;
-    return total;
+  Future<DatabaseResult<double>> getTotalSalesAmountOnDate(String date) async {
+    try {
+      final result = await getSalesByDate(date);
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      double total = 0;
+      for (final s in result.data!) {
+        total += s.sale.amount;
+      }
+      return DatabaseResult.success(total);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to calculate sales amount: $e');
+    }
   }
 
+  // ------------------------------
   // Expenses
+  // ------------------------------
 
-  Future<void> insertExpense(Expense expense) async {
-    final box = await Hive.openBox<Expense>('expenses');
-    await box.add(expense);
-  }
-
-  Future<List<Expense>> getAllExpenses() async {
-    final box = await Hive.openBox<Expense>('expenses');
-    return box.values.toList()..sort((a, b) => b.date.compareTo(a.date));
-  }
-
-  Future<List<Expense>> getExpensesByDate(String date) async {
-    final all = await getAllExpenses();
-    return all.where((e) => e.date == date).toList();
-  }
-
-  Future<List<Expense>> getExpensesBetweenDates(String startDate, String endDate) async {
-    final all = await getAllExpenses();
-    return all.where((e) =>
-        e.date.compareTo(startDate) >= 0 &&
-        e.date.compareTo(endDate) <= 0).toList();
-  }
-
-  Future<double> getTotalExpensesOnDate(String date) async {
-    final expenses = await getExpensesByDate(date);
-    double total = 0;
-    for (var e in expenses) total += e.amount;
-    return total;
-  }
-
-  // Payments
-
-  Future<void> insertPayment(Payment payment) async {
-    final box = await Hive.openBox<Payment>('payments');
-    await box.add(payment);
-  }
-
-  Future<List<PaymentWithParty>> getAllPayments() async {
-    final paymentBox = await Hive.openBox<Payment>('payments');
-    final partyBox = await Hive.openBox<Party>('parties');
-
-    List<PaymentWithParty> result = [];
-    for (var payment in paymentBox.values) {
-      final party = partyBox.getAt(payment.partyKey);
-      if (party != null) {
-        result.add(PaymentWithParty(payment: payment, party: party));
+  Future<DatabaseResult<Expense>> insertExpense(Expense expense) async {
+    try {
+      if (expense.amount <= 0) {
+        return DatabaseResult.failure('Amount must be greater than 0');
       }
+      if (expense.category.trim().isEmpty) {
+        return DatabaseResult.failure('Please select a category');
+      }
+
+      final box = await Hive.openBox<Expense>(boxExpenses);
+      await box.add(expense);
+      return DatabaseResult.success(expense);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to save expense: $e');
     }
-    result.sort((a, b) => b.payment.date.compareTo(a.payment.date));
-    return result;
   }
 
-  Future<List<PaymentWithParty>> getPaymentsByParty(Party party) async {
-    final all = await getAllPayments();
-    return all.where((p) => p.payment.partyKey == party.key).toList();
+  Future<DatabaseResult<List<Expense>>> getAllExpenses() async {
+    try {
+      final box = await Hive.openBox<Expense>(boxExpenses);
+      final list = box.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return DatabaseResult.success(list);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load expenses: $e');
+    }
   }
 
-  Future<double> getPartyBalance(Party party) async {
-    final sales = await getSalesByParty(party);
-    final payments = await getPaymentsByParty(party);
-
-    double totalSales = 0;
-    for (var s in sales) totalSales += s.sale.amount;
-
-    double totalPayments = 0;
-    for (var p in payments) totalPayments += p.payment.amount;
-
-    return totalSales - totalPayments;
+  Future<DatabaseResult<List<Expense>>> getExpensesByDate(String date) async {
+    try {
+      final result = await getAllExpenses();
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      final filtered = result.data!.where((e) => e.date == date).toList();
+      return DatabaseResult.success(filtered);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load expenses: $e');
+    }
   }
 
-  // Profit Calculations
-
-  Future<double> getDailyProfit(String date) async {
-    final revenue = await getTotalSalesAmountOnDate(date);
-    final expenses = await getTotalExpensesOnDate(date);
-    return revenue - expenses;
+  Future<DatabaseResult<double>> getTotalExpensesOnDate(String date) async {
+    try {
+      final result = await getExpensesByDate(date);
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      double total = 0;
+      for (final e in result.data!) {
+        total += e.amount;
+      }
+      return DatabaseResult.success(total);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to calculate expenses: $e');
+    }
   }
 
-  Future<Map<String, dynamic>> getWeeklyStats() async {
-    final now = DateTime.now();
-    final startDate = DateFormat('yyyy-MM-dd').format(now.subtract(const Duration(days: 7)));
-    final endDate = DateFormat('yyyy-MM-dd').format(now);
+  // ------------------------------
+  // Profit
+  // ------------------------------
 
-    final sales = await getSalesBetweenDates(startDate, endDate);
-    final expenses = await getExpensesBetweenDates(startDate, endDate);
-
-    double totalRevenue = 0;
-    double totalExpenses = 0;
-
-    for (var s in sales) totalRevenue += s.sale.amount;
-    for (var e in expenses) totalExpenses += e.amount;
-
-    return {
-      'revenue': totalRevenue,
-      'expenses': totalExpenses,
-      'profit': totalRevenue - totalExpenses,
-    };
+  Future<DatabaseResult<double>> getDailyProfit(String date) async {
+    try {
+      final salesResult = await getTotalSalesAmountOnDate(date);
+      if (!salesResult.success) {
+        return DatabaseResult.failure(salesResult.error);
+      }
+      final expensesResult = await getTotalExpensesOnDate(date);
+      if (!expensesResult.success) {
+        return DatabaseResult.failure(expensesResult.error);
+      }
+      final profit = (salesResult.data ?? 0) - (expensesResult.data ?? 0);
+      return DatabaseResult.success(profit);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to calculate profit: $e');
+    }
   }
 
-  Future<Map<String, dynamic>> getMonthlyStats() async {
-    final now = DateTime.now();
-    final startDate = DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month, 1));
-    final endDate = DateFormat('yyyy-MM-dd').format(now);
+  Future<DatabaseResult<Map<String, double>>> getWeeklyStats() async {
+    try {
+      final now = DateTime.now();
+      double totalRevenue = 0;
+      double totalExpenses = 0;
 
-    final sales = await getSalesBetweenDates(startDate, endDate);
-    final expenses = await getExpensesBetweenDates(startDate, endDate);
+      final allSales = await getAllSales();
+      if (allSales.success) {
+        for (final s in allSales.data!) {
+          final saleDate = DateFormat('yyyy-MM-dd').parse(s.sale.saleDate);
+          if (saleDate.isAfter(now.subtract(const Duration(days: 7)))) {
+            totalRevenue += s.sale.amount;
+          }
+        }
+      }
 
-    double totalRevenue = 0;
-    double totalExpenses = 0;
+      final allExpenses = await getAllExpenses();
+      if (allExpenses.success) {
+        for (final e in allExpenses.data!) {
+          final expenseDate = DateFormat('yyyy-MM-dd').parse(e.date);
+          if (expenseDate.isAfter(now.subtract(const Duration(days: 7)))) {
+            totalExpenses += e.amount;
+          }
+        }
+      }
 
-    for (var s in sales) totalRevenue += s.sale.amount;
-    for (var e in expenses) totalExpenses += e.amount;
+      return DatabaseResult.success({
+        'revenue': totalRevenue,
+        'expenses': totalExpenses,
+        'profit': totalRevenue - totalExpenses,
+      });
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load stats: $e');
+    }
+  }
 
-    return {
-      'revenue': totalRevenue,
-      'expenses': totalExpenses,
-      'profit': totalRevenue - totalExpenses,
-    };
+  Future<DatabaseResult<Map<String, double>>> getMonthlyStats() async {
+    try {
+      final now = DateTime.now();
+      double totalRevenue = 0;
+      double totalExpenses = 0;
+
+      final allSales = await getAllSales();
+      if (allSales.success) {
+        for (final s in allSales.data!) {
+          final saleDate = DateFormat('yyyy-MM-dd').parse(s.sale.saleDate);
+          if (saleDate.year == now.year && saleDate.month == now.month) {
+            totalRevenue += s.sale.amount;
+          }
+        }
+      }
+
+      final allExpenses = await getAllExpenses();
+      if (allExpenses.success) {
+        for (final e in allExpenses.data!) {
+          final expenseDate = DateFormat('yyyy-MM-dd').parse(e.date);
+          if (expenseDate.year == now.year && expenseDate.month == now.month) {
+            totalExpenses += e.amount;
+          }
+        }
+      }
+
+      return DatabaseResult.success({
+        'revenue': totalRevenue,
+        'expenses': totalExpenses,
+        'profit': totalRevenue - totalExpenses,
+      });
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load stats: $e');
+    }
   }
 }

@@ -15,6 +15,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   final dbHelper = DatabaseHelper.instance;
   List<Expense> expenses = [];
   bool isLoading = true;
+  String? error;
 
   @override
   void initState() {
@@ -25,24 +26,25 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   Future<void> _loadExpenses() async {
     setState(() {
       isLoading = true;
+      error = null;
     });
     try {
-      final list = await dbHelper.getAllExpenses();
+      final result = await dbHelper.getAllExpenses();
       if (!mounted) return;
       setState(() {
-        expenses = list;
+        isLoading = false;
+        if (result.success) {
+          expenses = result.data ?? [];
+        } else {
+          error = result.error;
+        }
       });
     } catch (e) {
       debugPrint('Expenses load error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load expenses: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
         setState(() {
           isLoading = false;
+          error = 'Failed to load expenses: $e';
         });
       }
     }
@@ -91,11 +93,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: category,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    border: OutlineInputBorder(),
-                  ),
+                        initialValue: category,
+                        decoration: const InputDecoration(
+                          labelText: 'Category',
+                          border: OutlineInputBorder(),
+                        ),
                   items: const [
                     DropdownMenuItem(value: 'Transport', child: Text('Transport')),
                     DropdownMenuItem(value: 'Labour', child: Text('Labour')),
@@ -147,7 +149,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 if (amount == null || amount <= 0) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter valid amount')),
+                      const SnackBar(content: Text('Please enter a valid amount')),
                     );
                   }
                   return;
@@ -155,32 +157,55 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
                 final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
 
-                final newExpense = Expense(
-                  date: dateStr,
-                  category: category,
-                  amount: amount,
-                  notes: notes,
-                );
-
                 if (expense == null) {
-                  await dbHelper.insertExpense(newExpense);
-                } else {
-                  await expense.delete();
-                  await dbHelper.insertExpense(newExpense);
-                }
-
-                if (mounted) {
-                  Navigator.pop(dialogContext);
-                  _loadExpenses();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        expense == null
-                            ? 'Expense added successfully!'
-                            : 'Expense updated successfully!',
-                      ),
-                    ),
+                  final newExpense = Expense.now(
+                    date: dateStr,
+                    category: category,
+                    amount: amount,
+                    notes: notes,
                   );
+                  final result = await dbHelper.insertExpense(newExpense);
+                  if (result.success) {
+                    if (mounted) {
+                      Navigator.pop(dialogContext);
+                      _loadExpenses();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Expense added successfully!')),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(result.error ?? 'Failed to add expense')),
+                      );
+                    }
+                  }
+                } else {
+                  final updatedExpense = Expense(
+                    date: dateStr,
+                    category: category,
+                    amount: amount,
+                    notes: notes,
+                    createdAt: expense.createdAt,
+                    updatedAt: DateTime.now(),
+                  );
+                  await expense.delete();
+                  final result = await dbHelper.insertExpense(updatedExpense);
+                  if (result.success) {
+                    if (mounted) {
+                      Navigator.pop(dialogContext);
+                      _loadExpenses();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Expense updated successfully!')),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(result.error ?? 'Failed to update expense')),
+                      );
+                    }
+                  }
                 }
               },
               child: Text(expense == null ? 'Save' : 'Update'),
@@ -203,45 +228,107 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : expenses.isEmpty
-              ? const Center(child: Text('No expenses added yet'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: expenses.length,
-                  itemBuilder: (context, index) {
-                    final expense = expenses[index];
-                    return Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+      body: RefreshIndicator(
+        onRefresh: _loadExpenses,
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _loadExpenses,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
                       ),
-                      child: ListTile(
-                        title: Text(
-                          expense.category,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(DateFormat('MMM d, yyyy').format(
-                              DateFormat('yyyy-MM-dd').parse(expense.date),
-                            )),
-                            if (expense.notes != null) Text(expense.notes!),
-                          ],
-                        ),
-                        trailing: Text(
-                          '₹${expense.amount.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.error,
+                    ),
+                  )
+                : expenses.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.money_off,
+                                size: 64,
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No expenses added yet',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _showExpenseDialog,
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add Expense'),
+                              ),
+                            ],
                           ),
                         ),
-                        onTap: () => _showExpenseDialog(expense),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: expenses.length,
+                        itemBuilder: (context, index) {
+                          final expense = expenses[index];
+                          return Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                expense.category,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(DateFormat('MMM d, yyyy').format(
+                                    DateFormat('yyyy-MM-dd').parse(expense.date),
+                                  )),
+                                  if (expense.notes != null) Text(expense.notes!),
+                                ],
+                              ),
+                              trailing: Text(
+                                '₹${expense.amount.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                              onTap: () => _showExpenseDialog(expense),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 }

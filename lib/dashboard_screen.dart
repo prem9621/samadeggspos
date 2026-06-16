@@ -21,6 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double totalExpenses = 0.0;
   double totalProfit = 0.0;
   bool isLoading = true;
+  String? error;
 
   @override
   void initState() {
@@ -31,29 +32,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadDashboardData() async {
     setState(() {
       isLoading = true;
+      error = null;
     });
     try {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final rate = await dbHelper.getDailyRateByDate(today);
-      final eggs = await dbHelper.getTotalEggsSoldOnDate(today);
-      final revenue = await dbHelper.getTotalSalesAmountOnDate(today);
-      final expenses = await dbHelper.getTotalExpensesOnDate(today);
-      final profit = revenue - expenses;
+
+      final rateResult = await dbHelper.getDailyRateByDate(today);
+      final eggsResult = await dbHelper.getTotalEggsSoldOnDate(today);
+      final revenueResult = await dbHelper.getTotalSalesAmountOnDate(today);
+      final expensesResult = await dbHelper.getTotalExpensesOnDate(today);
+      final profitResult = await dbHelper.getDailyProfit(today);
 
       if (!mounted) return;
+
       setState(() {
-        todayRate = rate;
-        totalEggs = eggs;
-        totalRevenue = revenue;
-        totalExpenses = expenses;
-        totalProfit = profit;
+        todayRate = rateResult.data;
+        totalEggs = eggsResult.data ?? 0.0;
+        totalRevenue = revenueResult.data ?? 0.0;
+        totalExpenses = expensesResult.data ?? 0.0;
+        totalProfit = profitResult.data ?? 0.0;
+        isLoading = false;
       });
     } catch (e) {
       debugPrint('Dashboard load error: $e');
-    } finally {
       if (mounted) {
         setState(() {
           isLoading = false;
+          error = 'Failed to load dashboard: $e';
         });
       }
     }
@@ -77,201 +82,226 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onRefresh: _loadDashboardData,
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            Text(
-                              "Today's Rate",
-                              style: Theme.of(context).textTheme.titleLarge,
+            : error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 16,
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              todayRate != null
-                                  ? '₹${todayRate!.baseRate.toStringAsFixed(2)} per 100 eggs'
-                                  : 'No rate set for today',
-                              style:
-                                  Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _loadDashboardData,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                Text(
+                                  "Today's Rate",
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  todayRate != null
+                                      ? '₹${todayRate!.baseRate.toStringAsFixed(2)} per 100 eggs'
+                                      : 'No rate set for today',
+                                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                                         color: todayRate != null
                                             ? Theme.of(context).colorScheme.primary
                                             : Theme.of(context).colorScheme.error,
                                       ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'Eggs Sold',
+                                        style: Theme.of(context).textTheme.titleMedium,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        totalEggs.toStringAsFixed(0),
+                                        style: Theme.of(context).textTheme.headlineSmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'Total Revenue',
+                                        style: Theme.of(context).textTheme.titleMedium,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '₹${totalRevenue.toStringAsFixed(2)}',
+                                        style: Theme.of(context).textTheme.headlineSmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Card(
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'Eggs Sold',
-                                    style: Theme.of(context).textTheme.titleMedium,
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: Theme.of(context).colorScheme.errorContainer,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'Total Expenses',
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              color: Theme.of(context).colorScheme.onErrorContainer,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '₹${totalExpenses.toStringAsFixed(2)}',
+                                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                              color: Theme.of(context).colorScheme.onErrorContainer,
+                                            ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    totalEggs.toStringAsFixed(0),
-                                    style: Theme.of(context).textTheme.headlineSmall,
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: Theme.of(context).colorScheme.primaryContainer,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'Profit',
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '₹${totalProfit.toStringAsFixed(2)}',
+                                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Card(
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Quick Actions',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            _QuickActionButton(
+                              icon: Icons.price_change,
+                              label: 'Update Rate',
+                              onTap: () {
+                                context.read<AppState>().setSelectedIndex(1);
+                              },
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'Total Revenue',
-                                    style: Theme.of(context).textTheme.titleMedium,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '₹${totalRevenue.toStringAsFixed(2)}',
-                                    style: Theme.of(context).textTheme.headlineSmall,
-                                  ),
-                                ],
-                              ),
+                            _QuickActionButton(
+                              icon: Icons.add_shopping_cart,
+                              label: 'Add Sale',
+                              onTap: () {
+                                context.read<AppState>().setSelectedIndex(3);
+                              },
                             ),
-                          ),
+                            _QuickActionButton(
+                              icon: Icons.money_off,
+                              label: 'Add Expense',
+                              onTap: () {
+                                context.read<AppState>().setSelectedIndex(5);
+                              },
+                            ),
+                            _QuickActionButton(
+                              icon: Icons.history,
+                              label: 'View History',
+                              onTap: () {
+                                context.read<AppState>().setSelectedIndex(4);
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Card(
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            color: Theme.of(context).colorScheme.errorContainer,
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'Total Expenses',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          color: Theme.of(context).colorScheme.onErrorContainer,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '₹${totalExpenses.toStringAsFixed(2)}',
-                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                          color: Theme.of(context).colorScheme.onErrorContainer,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Card(
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            color: Theme.of(context).colorScheme.primaryContainer,
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'Profit',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '₹${totalProfit.toStringAsFixed(2)}',
-                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Quick Actions',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _QuickActionButton(
-                          icon: Icons.price_change,
-                          label: 'Update Rate',
-                          onTap: () {
-                            context.read<AppState>().setSelectedIndex(1);
-                          },
-                        ),
-                        _QuickActionButton(
-                          icon: Icons.add_shopping_cart,
-                          label: 'Add Sale',
-                          onTap: () {
-                            context.read<AppState>().setSelectedIndex(3);
-                          },
-                        ),
-                        _QuickActionButton(
-                          icon: Icons.money_off,
-                          label: 'Add Expense',
-                          onTap: () {
-                            context.read<AppState>().setSelectedIndex(5);
-                          },
-                        ),
-                        _QuickActionButton(
-                          icon: Icons.history,
-                          label: 'View History',
-                          onTap: () {
-                            context.read<AppState>().setSelectedIndex(4);
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                  ),
       ),
     );
   }

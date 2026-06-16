@@ -21,6 +21,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   double adjustedRate = 0.0;
   double totalAmount = 0.0;
   bool isLoading = true;
+  String? error;
 
   @override
   void initState() {
@@ -39,27 +40,28 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   Future<void> _loadData() async {
     setState(() {
       isLoading = true;
+      error = null;
     });
     try {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final rate = await dbHelper.getDailyRateByDate(today);
-      final partyList = await dbHelper.getAllParties();
+      final rateResult = await dbHelper.getDailyRateByDate(today);
+      final partyResult = await dbHelper.getAllParties();
       if (!mounted) return;
       setState(() {
-        todayRate = rate;
-        parties = partyList;
+        isLoading = false;
+        if (rateResult.success && partyResult.success) {
+          todayRate = rateResult.data;
+          parties = partyResult.data ?? [];
+        } else {
+          error = rateResult.error ?? partyResult.error ?? 'Failed to load data';
+        }
       });
     } catch (e) {
       debugPrint('Sale entry load error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
         setState(() {
           isLoading = false;
+          error = 'Failed to load data: $e';
         });
       }
     }
@@ -81,26 +83,32 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
 
   Future<void> _saveSale() async {
     if (selectedParty == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a party')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a party')),
+        );
+      }
       return;
     }
     if (todayRate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please set today\'s rate first')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please set today\'s rate first')),
+        );
+      }
       return;
     }
     final quantity = double.tryParse(_quantityController.text);
     if (quantity == null || quantity <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter valid quantity')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter valid quantity')),
+        );
+      }
       return;
     }
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final sale = Sale(
+    final sale = Sale.now(
       partyKey: selectedParty!.key as int,
       saleDate: today,
       eggQuantity: quantity,
@@ -110,8 +118,8 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
     );
 
-    try {
-      await dbHelper.insertSale(sale);
+    final result = await dbHelper.insertSale(sale);
+    if (result.success) {
       _quantityController.clear();
       _notesController.clear();
       setState(() {
@@ -124,10 +132,10 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
           const SnackBar(content: Text('Sale saved successfully!')),
         );
       }
-    } catch (e) {
+    } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save sale: $e')),
+          SnackBar(content: Text(result.error ?? 'Failed to save sale')),
         );
       }
     }
@@ -141,111 +149,136 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (todayRate == null)
-                    Card(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          'Please set today\'s rate first!',
-                          style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+          : error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _loadData,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (todayRate == null)
+                        Card(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              'Please set today\'s rate first!',
+                              style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                            ),
+                          ),
+                        ),
+                      if (todayRate != null)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Today\'s Rate',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '₹${todayRate!.baseRate.toStringAsFixed(2)} per 100 eggs',
+                                  style: Theme.of(context).textTheme.headlineMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<Party>(
+                        value: selectedParty,
+                        decoration: const InputDecoration(
+                          labelText: 'Select Party',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: parties.map((party) {
+                          return DropdownMenuItem<Party>(
+                            value: party,
+                            child: Text(party.name),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedParty = value;
+                          });
+                          _calculateAmount();
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _quantityController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Egg Quantity',
+                          border: OutlineInputBorder(),
                         ),
                       ),
-                    ),
-                  if (todayRate != null)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Today\'s Rate',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '₹${todayRate!.baseRate.toStringAsFixed(2)} per 100 eggs',
-                              style: Theme.of(context).textTheme.headlineMedium,
-                            ),
-                          ],
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _notesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Notes (Optional)',
+                          border: OutlineInputBorder(),
                         ),
+                        maxLines: 3,
                       ),
-                    ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<Party>(
-                    initialValue: selectedParty,
-                    decoration: const InputDecoration(
-                      labelText: 'Select Party',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: parties.map((party) {
-                      return DropdownMenuItem<Party>(
-                        value: party,
-                        child: Text(party.name),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedParty = value;
-                      });
-                      _calculateAmount();
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _quantityController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Egg Quantity',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _notesController,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes (Optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-                  if (selectedParty != null && todayRate != null)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Rate Adjustment',
-                              style: Theme.of(context).textTheme.titleMedium,
+                      const SizedBox(height: 16),
+                      if (selectedParty != null && todayRate != null)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Rate Adjustment',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                Text('Adjustment: ${selectedParty!.adjustmentType} ${selectedParty!.adjustmentValue}'),
+                                Text('Adjusted Rate: ₹${adjustedRate.toStringAsFixed(2)} per 100 eggs'),
+                                Text(
+                                  'Total Amount: ₹${totalAmount.toStringAsFixed(2)}',
+                                  style: Theme.of(context).textTheme.headlineSmall,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 8),
-                            Text('Adjustment: ${selectedParty!.adjustmentType} ${selectedParty!.adjustmentValue}'),
-                            Text('Adjusted Rate: ₹${adjustedRate.toStringAsFixed(2)} per 100 eggs'),
-                            Text(
-                              'Total Amount: ₹${totalAmount.toStringAsFixed(2)}',
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                          ],
+                          ),
                         ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _saveSale,
+                        child: const Text('Save Sale'),
                       ),
-                    ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _saveSale,
-                    child: const Text('Save Sale'),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
     );
   }
 }

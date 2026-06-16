@@ -15,6 +15,7 @@ class _PartiesScreenState extends State<PartiesScreen> {
   List<Party> parties = [];
   List<Party> filteredParties = [];
   bool isLoading = true;
+  String? error;
   final searchController = TextEditingController();
 
   @override
@@ -26,25 +27,26 @@ class _PartiesScreenState extends State<PartiesScreen> {
   Future<void> _loadParties() async {
     setState(() {
       isLoading = true;
+      error = null;
     });
     try {
-      final list = await dbHelper.getAllParties();
+      final result = await dbHelper.getAllParties();
       if (!mounted) return;
       setState(() {
-        parties = list;
-        filteredParties = list;
+        isLoading = false;
+        if (result.success) {
+          parties = result.data ?? [];
+          filteredParties = parties;
+        } else {
+          error = result.error;
+        }
       });
     } catch (e) {
       debugPrint('Parties load error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load parties: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
         setState(() {
           isLoading = false;
+          error = 'Failed to load parties: $e';
         });
       }
     }
@@ -57,8 +59,9 @@ class _PartiesScreenState extends State<PartiesScreen> {
       });
     } else {
       setState(() {
+        final searchLower = query.toLowerCase().trim();
         filteredParties = parties
-            .where((p) => p.name.toLowerCase().contains(query.toLowerCase()))
+            .where((p) => p.name.toLowerCase().contains(searchLower))
             .toList();
       });
     }
@@ -110,11 +113,11 @@ class _PartiesScreenState extends State<PartiesScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: adjustmentType,
-                  decoration: const InputDecoration(
-                    labelText: 'Rate Adjustment Type',
-                    border: OutlineInputBorder(),
-                  ),
+                        initialValue: adjustmentType,
+                        decoration: const InputDecoration(
+                          labelText: 'Rate Adjustment Type',
+                          border: OutlineInputBorder(),
+                        ),
                   items: const [
                     DropdownMenuItem(value: '=', child: Text('Equal (=)')),
                     DropdownMenuItem(value: '+', child: Text('Plus (+)')),
@@ -181,34 +184,59 @@ class _PartiesScreenState extends State<PartiesScreen> {
                   return;
                 }
 
-                final newParty = Party(
-                  name: name,
-                  phone: phone,
-                  address: address,
-                  adjustmentType: adjustmentType,
-                  adjustmentValue: adjustmentValue,
-                  notes: notes,
-                );
-
                 if (party == null) {
-                  await dbHelper.insertParty(newParty);
-                } else {
-                  await party.delete();
-                  await dbHelper.insertParty(newParty);
-                }
-
-                if (mounted) {
-                  Navigator.pop(dialogContext);
-                  _loadParties();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        party == null
-                            ? 'Party added successfully!'
-                            : 'Party updated successfully!',
-                      ),
-                    ),
+                  final newParty = Party.now(
+                    name: name,
+                    phone: phone,
+                    address: address,
+                    adjustmentType: adjustmentType,
+                    adjustmentValue: adjustmentValue,
+                    notes: notes,
                   );
+                  final result = await dbHelper.insertParty(newParty);
+                  if (result.success) {
+                    if (mounted) {
+                      Navigator.pop(dialogContext);
+                      _loadParties();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Party added successfully!')),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(result.error ?? 'Failed to add party')),
+                      );
+                    }
+                  }
+                } else {
+                  final updatedParty = Party(
+                    name: name,
+                    phone: phone,
+                    address: address,
+                    adjustmentType: adjustmentType,
+                    adjustmentValue: adjustmentValue,
+                    notes: notes,
+                    createdAt: party.createdAt,
+                    updatedAt: DateTime.now(),
+                  );
+                  await party.delete();
+                  final result = await dbHelper.insertParty(updatedParty);
+                  if (result.success) {
+                    if (mounted) {
+                      Navigator.pop(dialogContext);
+                      _loadParties();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Party updated successfully!')),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(result.error ?? 'Failed to update party')),
+                      );
+                    }
+                  }
                 }
               },
               child: Text(party == null ? 'Save' : 'Update'),
@@ -231,95 +259,168 @@ class _PartiesScreenState extends State<PartiesScreen> {
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: TextField(
-                    controller: searchController,
-                    onChanged: _searchParties,
-                    decoration: InputDecoration(
-                      hintText: 'Search parties...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+      body: RefreshIndicator(
+        onRefresh: _loadParties,
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _loadParties,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: filteredParties.isEmpty
-                      ? const Center(child: Text('No parties added yet'))
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filteredParties.length,
-                          itemBuilder: (context, index) {
-                            final party = filteredParties[index];
-                            return Card(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: ListTile(
-                                title: Text(
-                                  party.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                  )
+                : Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: TextField(
+                          controller: searchController,
+                          onChanged: _searchParties,
+                          decoration: InputDecoration(
+                            hintText: 'Search parties...',
+                            prefixIcon: const Icon(Icons.search),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: filteredParties.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(32),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.group,
+                                        size: 64,
+                                        color: Theme.of(context).colorScheme.outline,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        parties.isEmpty ? 'No parties added yet' : 'No matching parties found',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      if (parties.isEmpty)
+                                        const SizedBox(height: 16),
+                                      if (parties.isEmpty)
+                                        ElevatedButton.icon(
+                                          onPressed: _showPartyDialog,
+                                          icon: const Icon(Icons.add),
+                                          label: const Text('Add Party'),
+                                        ),
+                                    ],
                                   ),
                                 ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (party.phone != null) Text('Phone: ${party.phone}'),
-                                    if (party.address != null) Text('Address: ${party.address}'),
-                                    Text('Adjustment: ${party.adjustmentType} ${party.adjustmentValue}'),
-                                    if (party.notes != null) Text('Notes: ${party.notes}'),
-                                  ],
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () => _showPartyDialog(party),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(16),
+                                itemCount: filteredParties.length,
+                                itemBuilder: (context, index) {
+                                  final party = filteredParties[index];
+                                  return Card(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
-                                      onPressed: () async {
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-                                          builder: (context) => AlertDialog(
-                                            title: const Text('Delete Party'),
-                                            content: const Text('Are you sure you want to delete this party?'),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(context, false),
-                                                child: const Text('Cancel'),
-                                              ),
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(context, true),
-                                                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                                                child: const Text('Delete'),
-                                              ),
-                                            ],
+                                    child: ListTile(
+                                      title: Text(
+                                        party.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          if (party.phone != null) Text('Phone: ${party.phone}'),
+                                          if (party.address != null) Text('Address: ${party.address}'),
+                                          Text('Adjustment: ${party.adjustmentType} ${party.adjustmentValue}'),
+                                          if (party.notes != null) Text('Notes: ${party.notes}'),
+                                        ],
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit),
+                                            onPressed: () => _showPartyDialog(party),
                                           ),
-                                        );
-                                        if (confirm == true) {
-                                          await dbHelper.deleteParty(party);
-                                          _loadParties();
-                                        }
-                                      },
+                                          IconButton(
+                                            icon: const Icon(Icons.delete, color: Colors.red),
+                                            onPressed: () async {
+                                              final confirm = await showDialog<bool>(
+                                                context: context,
+                                                builder: (context) => AlertDialog(
+                                                  title: const Text('Delete Party'),
+                                                  content: const Text('Are you sure you want to delete this party?'),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () => Navigator.pop(context, false),
+                                                      child: const Text('Cancel'),
+                                                    ),
+                                                    TextButton(
+                                                      onPressed: () => Navigator.pop(context, true),
+                                                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                                      child: const Text('Delete'),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                              if (confirm == true) {
+                                                final result = await dbHelper.deleteParty(party);
+                                                if (result.success) {
+                                                  _loadParties();
+                                                } else {
+                                                  if (mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text(result.error ?? 'Failed to delete party')),
+                                                    );
+                                                  }
+                                                }
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
+                      ),
+                    ],
+                  ),
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 }

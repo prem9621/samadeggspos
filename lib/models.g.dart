@@ -19,17 +19,23 @@ class DailyRateAdapter extends TypeAdapter<DailyRate> {
     return DailyRate(
       date: fields[0] as String,
       baseRate: fields[1] as double,
+      createdAt: fields[2] as DateTime,
+      updatedAt: fields[3] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, DailyRate obj) {
     writer
-      ..writeByte(2)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.date)
       ..writeByte(1)
-      ..write(obj.baseRate);
+      ..write(obj.baseRate)
+      ..writeByte(2)
+      ..write(obj.createdAt)
+      ..writeByte(3)
+      ..write(obj.updatedAt);
   }
 
   @override
@@ -60,13 +66,15 @@ class PartyAdapter extends TypeAdapter<Party> {
       adjustmentType: fields[3] as String,
       adjustmentValue: fields[4] as double,
       notes: fields[5] as String?,
+      createdAt: fields[6] as DateTime,
+      updatedAt: fields[7] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, Party obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -78,7 +86,11 @@ class PartyAdapter extends TypeAdapter<Party> {
       ..writeByte(4)
       ..write(obj.adjustmentValue)
       ..writeByte(5)
-      ..write(obj.notes);
+      ..write(obj.notes)
+      ..writeByte(6)
+      ..write(obj.createdAt)
+      ..writeByte(7)
+      ..write(obj.updatedAt);
   }
 
   @override
@@ -110,13 +122,15 @@ class SaleAdapter extends TypeAdapter<Sale> {
       adjustedRate: fields[4] as double,
       amount: fields[5] as double,
       notes: fields[6] as String?,
+      createdAt: fields[7] as DateTime,
+      updatedAt: fields[8] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, Sale obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.partyKey)
       ..writeByte(1)
@@ -130,7 +144,11 @@ class SaleAdapter extends TypeAdapter<Sale> {
       ..writeByte(5)
       ..write(obj.amount)
       ..writeByte(6)
-      ..write(obj.notes);
+      ..write(obj.notes)
+      ..writeByte(7)
+      ..write(obj.createdAt)
+      ..writeByte(8)
+      ..write(obj.updatedAt);
   }
 
   @override
@@ -159,13 +177,15 @@ class ExpenseAdapter extends TypeAdapter<Expense> {
       category: fields[1] as String,
       amount: fields[2] as double,
       notes: fields[3] as String?,
+      createdAt: fields[4] as DateTime,
+      updatedAt: fields[5] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, Expense obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.date)
       ..writeByte(1)
@@ -173,7 +193,11 @@ class ExpenseAdapter extends TypeAdapter<Expense> {
       ..writeByte(2)
       ..write(obj.amount)
       ..writeByte(3)
-      ..write(obj.notes);
+      ..write(obj.notes)
+      ..writeByte(4)
+      ..write(obj.createdAt)
+      ..writeByte(5)
+      ..write(obj.updatedAt);
   }
 
   @override
@@ -202,13 +226,15 @@ class PaymentAdapter extends TypeAdapter<Payment> {
       date: fields[1] as String,
       amount: fields[2] as double,
       notes: fields[3] as String?,
+      createdAt: fields[4] as DateTime,
+      updatedAt: fields[5] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, Payment obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.partyKey)
       ..writeByte(1)
@@ -216,7 +242,11 @@ class PaymentAdapter extends TypeAdapter<Payment> {
       ..writeByte(2)
       ..write(obj.amount)
       ..writeByte(3)
-      ..write(obj.notes);
+      ..write(obj.notes)
+      ..writeByte(4)
+      ..write(obj.createdAt)
+      ..writeByte(5)
+      ..write(obj.updatedAt);
   }
 
   @override

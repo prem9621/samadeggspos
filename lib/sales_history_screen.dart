@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:intl/intl.dart';
 import 'models.dart';
 import 'database_helper.dart';
@@ -17,6 +18,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Party? selectedPartyFilter;
   DateTime? selectedDateFilter;
   bool isLoading = true;
+  String? error;
 
   @override
   void initState() {
@@ -27,34 +29,68 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Future<void> _loadData() async {
     setState(() {
       isLoading = true;
+      error = null;
     });
     try {
-      final partyList = await dbHelper.getAllParties();
+      final partyResult = await dbHelper.getAllParties();
+      if (!partyResult.success) {
+        if (!mounted) return;
+        setState(() {
+          isLoading = false;
+          error = partyResult.error;
+        });
+        return;
+      }
+
       List<SaleWithParty> saleList;
       if (selectedPartyFilter != null) {
-        saleList = await dbHelper.getSalesByParty(selectedPartyFilter!);
+        final salesResult = await dbHelper.getSalesByParty(selectedPartyFilter!);
+        if (!salesResult.success) {
+          if (!mounted) return;
+          setState(() {
+            isLoading = false;
+            error = salesResult.error;
+          });
+          return;
+        }
+        saleList = salesResult.data ?? [];
       } else if (selectedDateFilter != null) {
         final dateStr = DateFormat('yyyy-MM-dd').format(selectedDateFilter!);
-        saleList = await dbHelper.getSalesByDate(dateStr);
+        final salesResult = await dbHelper.getSalesByDate(dateStr);
+        if (!salesResult.success) {
+          if (!mounted) return;
+          setState(() {
+            isLoading = false;
+            error = salesResult.error;
+          });
+          return;
+        }
+        saleList = salesResult.data ?? [];
       } else {
-        saleList = await dbHelper.getAllSales();
+        final salesResult = await dbHelper.getAllSales();
+        if (!salesResult.success) {
+          if (!mounted) return;
+          setState(() {
+            isLoading = false;
+            error = salesResult.error;
+          });
+          return;
+        }
+        saleList = salesResult.data ?? [];
       }
+
       if (!mounted) return;
       setState(() {
-        parties = partyList;
+        parties = partyResult.data ?? [];
         sales = saleList;
+        isLoading = false;
       });
     } catch (e) {
       debugPrint('Sales history load error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load sales: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
         setState(() {
           isLoading = false;
+          error = 'Failed to load sales: $e';
         });
       }
     }
@@ -122,32 +158,63 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : sales.isEmpty
-              ? const Center(child: Text('No sales found'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: sales.length,
-                  itemBuilder: (context, index) {
-                    final item = sales[index];
-                    return Card(
-                      child: ListTile(
-                        title: Text(item.party.name),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(DateFormat('MMM d, yyyy').format(DateTime.parse(item.sale.saleDate))),
-                            Text('${item.sale.eggQuantity.toStringAsFixed(0)} eggs'),
-                            if (item.sale.notes != null) Text('Note: ${item.sale.notes}'),
-                          ],
-                        ),
-                        trailing: Text('₹${item.sale.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        onTap: () => _showSaleDetail(item),
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _loadData,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  )
+                : sales.isEmpty
+                    ? const Center(child: Text('No sales found'))
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: sales.length,
+                        itemBuilder: (context, index) {
+                          final item = sales[index];
+                          return Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ListTile(
+                              title: Text(item.party.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(DateFormat('MMM d, yyyy').format(DateTime.parse(item.sale.saleDate))),
+                                  Text('${item.sale.eggQuantity.toStringAsFixed(0)} eggs'),
+                                  if (item.sale.notes != null) Text('Note: ${item.sale.notes}'),
+                                ],
+                              ),
+                              trailing: Text('₹${item.sale.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              onTap: () => _showSaleDetail(item),
+                            ),
+                          );
+                        },
+                      ),
+      ),
     );
   }
 
