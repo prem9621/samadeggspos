@@ -2,17 +2,12 @@
   "version": 2,
   "builds": [
     {
-      "src": "**",
-      "use": "@vercel/static",
-      "config": {
-        "dist": "build/web"
-      }
+      "src": "build/web/**",
+      "use": "@vercel/static"
     }
   ],
-  "scripts": {
-    "build": "if [ ! -d \"flutter\" ]; then git clone https://github.com/flutter/flutter.git -b 3.29.0 --depth 1; fi && export PATH=\"$PATH:flutter/bin\" && flutter doctor && flutter pub get && flutter build web --release"
-  },
   "routes": [
-    { "src": "/(.*)", "dest": "/$1" }
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
