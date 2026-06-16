@@ -59,13 +59,14 @@ class PartyAdapter extends TypeAdapter<Party> {
       address: fields[2] as String?,
       adjustmentType: fields[3] as String,
       adjustmentValue: fields[4] as double,
+      notes: fields[5] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Party obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -75,7 +76,9 @@ class PartyAdapter extends TypeAdapter<Party> {
       ..writeByte(3)
       ..write(obj.adjustmentType)
       ..writeByte(4)
-      ..write(obj.adjustmentValue);
+      ..write(obj.adjustmentValue)
+      ..writeByte(5)
+      ..write(obj.notes);
   }
 
   @override
@@ -137,6 +140,92 @@ class SaleAdapter extends TypeAdapter<Sale> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SaleAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class ExpenseAdapter extends TypeAdapter<Expense> {
+  @override
+  final int typeId = 3;
+
+  @override
+  Expense read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return Expense(
+      date: fields[0] as String,
+      category: fields[1] as String,
+      amount: fields[2] as double,
+      notes: fields[3] as String?,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, Expense obj) {
+    writer
+      ..writeByte(4)
+      ..writeByte(0)
+      ..write(obj.date)
+      ..writeByte(1)
+      ..write(obj.category)
+      ..writeByte(2)
+      ..write(obj.amount)
+      ..writeByte(3)
+      ..write(obj.notes);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExpenseAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class PaymentAdapter extends TypeAdapter<Payment> {
+  @override
+  final int typeId = 4;
+
+  @override
+  Payment read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return Payment(
+      partyKey: fields[0] as int,
+      date: fields[1] as String,
+      amount: fields[2] as double,
+      notes: fields[3] as String?,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, Payment obj) {
+    writer
+      ..writeByte(4)
+      ..writeByte(0)
+      ..write(obj.partyKey)
+      ..writeByte(1)
+      ..write(obj.date)
+      ..writeByte(2)
+      ..write(obj.amount)
+      ..writeByte(3)
+      ..write(obj.notes);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PaymentAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

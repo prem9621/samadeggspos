@@ -28,10 +28,13 @@ class Party extends HiveObject {
   final String? address;
 
   @HiveField(3)
-  final String adjustmentType;
+  final String adjustmentType; // "=", "+", "-", "+%", "-%"
 
   @HiveField(4)
   final double adjustmentValue;
+
+  @HiveField(5)
+  final String? notes;
 
   Party({
     required this.name,
@@ -39,6 +42,7 @@ class Party extends HiveObject {
     this.address,
     required this.adjustmentType,
     required this.adjustmentValue,
+    this.notes,
   });
 
   double calculateAdjustedRate(double baseRate) {
@@ -47,6 +51,10 @@ class Party extends HiveObject {
         return baseRate + adjustmentValue;
       case '-':
         return baseRate - adjustmentValue;
+      case '+%':
+        return baseRate * (1 + adjustmentValue / 100);
+      case '-%':
+        return baseRate * (1 - adjustmentValue / 100);
       case '=':
       default:
         return baseRate;
@@ -93,4 +101,55 @@ class SaleWithParty {
   final Party party;
 
   SaleWithParty({required this.sale, required this.party});
+}
+
+@HiveType(typeId: 3)
+class Expense extends HiveObject {
+  @HiveField(0)
+  final String date;
+
+  @HiveField(1)
+  final String category; // Transport, Labour, Electricity, Rent, Miscellaneous
+
+  @HiveField(2)
+  final double amount;
+
+  @HiveField(3)
+  final String? notes;
+
+  Expense({
+    required this.date,
+    required this.category,
+    required this.amount,
+    this.notes,
+  });
+}
+
+@HiveType(typeId: 4)
+class Payment extends HiveObject {
+  @HiveField(0)
+  final int partyKey;
+
+  @HiveField(1)
+  final String date;
+
+  @HiveField(2)
+  final double amount;
+
+  @HiveField(3)
+  final String? notes;
+
+  Payment({
+    required this.partyKey,
+    required this.date,
+    required this.amount,
+    this.notes,
+  });
+}
+
+class PaymentWithParty {
+  final Payment payment;
+  final Party party;
+
+  PaymentWithParty({required this.payment, required this.party});
 }

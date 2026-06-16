@@ -7,6 +7,7 @@ import 'daily_rate_screen.dart';
 import 'parties_screen.dart';
 import 'sale_entry_screen.dart';
 import 'sales_history_screen.dart';
+import 'expenses_screen.dart';
 import 'settings_screen.dart';
 
 void main() async {
@@ -100,6 +101,7 @@ class _MainScreenState extends State<MainScreen> {
     const PartiesScreen(),
     const SaleEntryScreen(),
     const SalesHistoryScreen(),
+    const ExpensesScreen(),
     const SettingsScreen(),
   ];
 
@@ -124,6 +126,8 @@ class _MainScreenState extends State<MainScreen> {
           NavigationDestination(
               icon: Icon(Icons.add_shopping_cart), label: 'Sale'),
           NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+          NavigationDestination(
+              icon: Icon(Icons.money_off), label: 'Expenses'),
           NavigationDestination(
               icon: Icon(Icons.settings), label: 'Settings'),
         ],
