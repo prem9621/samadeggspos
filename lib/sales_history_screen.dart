@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'models.dart';
 import 'database_helper.dart';
+import 'main.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -14,216 +15,179 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   final dbHelper = DatabaseHelper.instance;
   List<SaleWithParty> sales = [];
   List<Party> parties = [];
-  Party? selectedPartyFilter;
-  DateTime? selectedDateFilter;
+  Party? filterParty;
+  DateTime? filterDate;
   bool isLoading = true;
   String? error;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _load();
   }
 
-  Future<void> _loadData() async {
-    setState(() {
-      isLoading = true;
-      error = null;
-    });
+  Future<void> _load() async {
+    setState(() { isLoading = true; error = null; });
     try {
-      final partyResult = await dbHelper.getAllParties();
-      if (!partyResult.success) {
-        if (!mounted) return;
-        setState(() {
-          isLoading = false;
-          error = partyResult.error;
-        });
-        return;
-      }
-
+      final partyR = await dbHelper.getAllParties();
       List<SaleWithParty> saleList;
-      if (selectedPartyFilter != null) {
-        final salesResult = await dbHelper.getSalesByParty(selectedPartyFilter!);
-        if (!salesResult.success) {
-          if (!mounted) return;
-          setState(() {
-            isLoading = false;
-            error = salesResult.error;
-          });
-          return;
-        }
-        saleList = salesResult.data ?? [];
-      } else if (selectedDateFilter != null) {
-        final dateStr = DateFormat('yyyy-MM-dd').format(selectedDateFilter!);
-        final salesResult = await dbHelper.getSalesByDate(dateStr);
-        if (!salesResult.success) {
-          if (!mounted) return;
-          setState(() {
-            isLoading = false;
-            error = salesResult.error;
-          });
-          return;
-        }
-        saleList = salesResult.data ?? [];
+
+      if (filterParty != null) {
+        saleList = (await dbHelper.getSalesByParty(filterParty!)).data ?? [];
+      } else if (filterDate != null) {
+        saleList = (await dbHelper.getSalesByDate(
+          DateFormat('yyyy-MM-dd').format(filterDate!))).data ?? [];
       } else {
-        final salesResult = await dbHelper.getAllSales();
-        if (!salesResult.success) {
-          if (!mounted) return;
-          setState(() {
-            isLoading = false;
-            error = salesResult.error;
-          });
-          return;
-        }
-        saleList = salesResult.data ?? [];
+        saleList = (await dbHelper.getAllSales()).data ?? [];
       }
 
       if (!mounted) return;
       setState(() {
-        parties = partyResult.data ?? [];
+        parties = partyR.data ?? [];
         sales = saleList;
         isLoading = false;
       });
     } catch (e) {
-      debugPrint('Sales history load error: $e');
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-          error = 'Failed to load sales: $e';
-        });
-      }
+      if (mounted) setState(() { isLoading = false; error = 'Failed: $e'; });
     }
   }
 
-  Future<void> _selectDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDateFilter ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        selectedDateFilter = picked;
-        selectedPartyFilter = null;
-      });
-      _loadData();
-    }
-  }
+  double get _totalAmount => sales.fold(0, (s, e) => s + e.sale.amount);
 
   @override
   Widget build(BuildContext context) {
+    final hasFilter = filterParty != null || filterDate != null;
     return Scaffold(
+      backgroundColor: kSurface,
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
+          // Filter bar
+          Container(
+            color: kCard,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
             child: Row(
               children: [
-                const Expanded(
-                  child: Text(
-                    'Sales History',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                PopupMenuButton(
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      child: const ListTile(
-                        leading: Icon(Icons.date_range),
-                        title: Text('Filter by Date'),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _selectDate();
-                      },
-                    ),
-                    PopupMenuItem(
-                      child: const ListTile(
-                        leading: Icon(Icons.group),
-                        title: Text('Filter by Party'),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _showPartyFilterDialog();
-                      },
-                    ),
-                    PopupMenuItem(
-                      child: const ListTile(
-                        leading: Icon(Icons.clear),
-                        title: Text('Clear Filters'),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        setState(() {
-                          selectedPartyFilter = null;
-                          selectedDateFilter = null;
-                        });
-                        _loadData();
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-        onRefresh: _loadData,
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                              fontSize: 16,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: _loadData,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Retry'),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _FilterChip(
+                          label: filterDate != null
+                              ? DateFormat('d MMM').format(filterDate!)
+                              : 'Date',
+                          icon: Icons.calendar_today_rounded,
+                          active: filterDate != null,
+                          onTap: () async {
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: filterDate ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                            );
+                            if (d != null) {
+                              setState(() { filterDate = d; filterParty = null; });
+                              _load();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChip(
+                          label: filterParty?.name ?? 'Party',
+                          icon: Icons.person_rounded,
+                          active: filterParty != null,
+                          onTap: () => _showPartyPicker(),
+                        ),
+                        if (hasFilter) ...[
+                          const SizedBox(width: 8),
+                          _FilterChip(
+                            label: 'Clear',
+                            icon: Icons.clear_rounded,
+                            active: false,
+                            onTap: () {
+                              setState(() { filterDate = null; filterParty = null; });
+                              _load();
+                            },
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                  )
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: kBorder),
+
+          // Summary
+          if (!isLoading && sales.isNotEmpty)
+            Container(
+              color: kCard,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('${sales.length} sales',
+                    style: const TextStyle(fontSize: 12, color: kTextSub)),
+                  Text('Total: ₹${_totalAmount.toStringAsFixed(2)}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kGreen)),
+                ],
+              ),
+            ),
+
+          Expanded(
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator(color: kAmber))
                 : sales.isEmpty
-                    ? const Center(child: Text('No sales found'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: sales.length,
-                        itemBuilder: (context, index) {
-                          final item = sales[index];
-                          return Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              title: Text(item.party.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(DateFormat('MMM d, yyyy').format(DateTime.parse(item.sale.saleDate))),
-                                  Text('${item.sale.eggQuantity.toStringAsFixed(0)} eggs'),
-                                  if (item.sale.notes != null) Text('Note: ${item.sale.notes}'),
-                                ],
-                              ),
-                              trailing: Text('₹${item.sale.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              onTap: () => _showSaleDetail(item),
-                            ),
-                          );
-                        },
+                    ? _emptyState()
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        color: kAmber,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                          itemCount: sales.length,
+                          itemBuilder: (_, i) => _SaleTile(
+                            item: sales[i],
+                            onTap: () => _showDetail(sales[i]),
+                          ),
+                        ),
                       ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showPartyPicker() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: kCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(width: 36, height: 4,
+            decoration: BoxDecoration(color: kBorder,
+              borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 12),
+          const Text('Filter by Party',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          const Divider(),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              children: parties.map((p) => ListTile(
+                dense: true,
+                title: Text(p.name, style: const TextStyle(fontSize: 13)),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() { filterParty = p; filterDate = null; });
+                  _load();
+                },
+              )).toList(),
             ),
           ),
         ],
@@ -231,68 +195,164 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     );
   }
 
-  Future<void> _showPartyFilterDialog() async {
-    showDialog(
+  Future<void> _showDetail(SaleWithParty item) async {
+    showModalBottomSheet(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Filter by Party'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: parties
-                .map((p) => ListTile(
-                      title: Text(p.name),
-                      onTap: () {
-                        Navigator.pop(dialogContext);
-                        setState(() {
-                          selectedPartyFilter = p;
-                          selectedDateFilter = null;
-                        });
-                        _loadData();
-                      },
-                    ))
-                .toList(),
-          ),
+      backgroundColor: kCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: kBorder,
+                borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+            const Text('Sale Details',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            _DetailRow('Party', item.party.name),
+            _DetailRow('Date', DateFormat('d MMM yyyy')
+              .format(DateTime.parse(item.sale.saleDate))),
+            _DetailRow('Quantity', '${item.sale.eggQuantity.toStringAsFixed(0)} eggs'),
+            _DetailRow('Base Rate', '₹${item.sale.baseRate.toStringAsFixed(2)} / 100'),
+            _DetailRow('Adjusted Rate', '₹${item.sale.adjustedRate.toStringAsFixed(2)} / 100'),
+            const Divider(height: 16, color: kBorder),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Total',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                Text('₹${item.sale.amount.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kGreen)),
+              ],
+            ),
+            if (item.sale.notes != null) ...[
+              const SizedBox(height: 10),
+              Text('Note: ${item.sale.notes}',
+                style: const TextStyle(fontSize: 12, color: kTextSub)),
+            ],
+          ],
         ),
       ),
     );
   }
 
-  Future<void> _showSaleDetail(SaleWithParty item) async {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Sale Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Party: ${item.party.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text('Date: ${DateFormat('MMM d, yyyy').format(DateTime.parse(item.sale.saleDate))}'),
-              const SizedBox(height: 8),
-              Text('Quantity: ${item.sale.eggQuantity.toStringAsFixed(0)} eggs'),
-              const SizedBox(height: 8),
-              Text('Base Rate: ₹${item.sale.baseRate.toStringAsFixed(2)} / 100'),
-              const SizedBox(height: 8),
-              Text('Adjusted Rate: ₹${item.sale.adjustedRate.toStringAsFixed(2)} / 100'),
-              const SizedBox(height: 8),
-              Text('Total Amount: ₹${item.sale.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-              if (item.sale.notes != null) ...[
-                const SizedBox(height: 8),
-                Text('Notes: ${item.sale.notes}'),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
-          ),
+  Widget _emptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(width: 56, height: 56,
+            decoration: BoxDecoration(color: kAmberLight,
+              borderRadius: BorderRadius.circular(14)),
+            child: const Icon(Icons.receipt_long_rounded, color: kAmber, size: 28)),
+          const SizedBox(height: 12),
+          const Text('No sales found',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
+}
+
+class _SaleTile extends StatelessWidget {
+  final SaleWithParty item;
+  final VoidCallback onTap;
+  const _SaleTile({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    decoration: BoxDecoration(
+      color: kCard, borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: kBorder),
+    ),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(9)),
+            child: const Icon(Icons.trending_up_rounded, color: kGreen, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.party.name,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                Text('${item.sale.eggQuantity.toStringAsFixed(0)} eggs · '
+                  '${DateFormat('d MMM').format(DateTime.parse(item.sale.saleDate))}',
+                  style: const TextStyle(fontSize: 11, color: kTextSub)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('₹${item.sale.amount.toStringAsFixed(0)}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kGreen)),
+              Text('₹${item.sale.adjustedRate.toStringAsFixed(0)}/100',
+                style: const TextStyle(fontSize: 11, color: kTextSub)),
+            ],
+          ),
+        ]),
+      ),
+    ),
+  );
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+  const _FilterChip({required this.label, required this.icon,
+    required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: active ? kAmber : kCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: active ? kAmber : kBorder),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: active ? Colors.white : kTextSub),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w500,
+          color: active ? Colors.white : kText)),
+      ]),
+    ),
+  );
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label, value;
+  const _DetailRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: kTextSub)),
+        Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+      ],
+    ),
+  );
 }
