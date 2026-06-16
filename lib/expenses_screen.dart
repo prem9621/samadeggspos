@@ -219,16 +219,28 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Expenses'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showExpenseDialog(),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Expenses',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                FloatingActionButton(
+                  mini: true,
+                  onPressed: () => _showExpenseDialog(),
+                  child: const Icon(Icons.add),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      body: RefreshIndicator(
+          Expanded(
+            child: RefreshIndicator(
         onRefresh: _loadExpenses,
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -323,6 +335,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           );
                         },
                       ),
+            ),
+          ),
+        ],
       ),
     );
   }

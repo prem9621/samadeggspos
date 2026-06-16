@@ -144,9 +144,6 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('New Sale'),
-      ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : error != null

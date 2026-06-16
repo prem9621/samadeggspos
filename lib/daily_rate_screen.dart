@@ -123,21 +123,34 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
   Widget build(BuildContext context) {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Daily Rate'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: _showRateDialog,
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: _loadRateHistory,
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : error != null
-                ? Center(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Daily Rate History',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  FloatingActionButton(
+                    mini: true,
+                    onPressed: _showRateDialog,
+                    child: const Icon(Icons.edit),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Builder(builder: (context) {
+                if (isLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (error != null) {
+                  return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(32),
                       child: Column(
@@ -160,60 +173,62 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
                         ],
                       ),
                     ),
-                  )
-                : rateHistory.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.price_change,
-                                size: 64,
-                                color: Theme.of(context).colorScheme.outline,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No rates set yet',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: _showRateDialog,
-                                icon: const Icon(Icons.add),
-                                label: const Text('Set Today\'s Rate'),
-                              ),
-                            ],
+                  );
+                } else if (rateHistory.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.price_change,
+                            size: 64,
+                            color: Theme.of(context).colorScheme.outline,
                           ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: rateHistory.length,
-                        itemBuilder: (context, index) {
-                          final rate = rateHistory[index];
-                          return Card(
-                            child: ListTile(
-                              title: Text(
-                                DateFormat('MMM d, yyyy').format(DateTime.parse(rate.date)),
-                              ),
-                              subtitle: Text('₹${rate.baseRate.toStringAsFixed(2)} per 100 eggs'),
-                              trailing: rate.date == today
-                                  ? const Chip(label: Text('Today'))
-                                  : null,
+                          const SizedBox(height: 16),
+                          Text(
+                            'No rates set yet',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
-                          );
-                        },
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _showRateDialog,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Set Today\'s Rate'),
+                          ),
+                        ],
                       ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showRateDialog,
-        child: const Icon(Icons.edit),
+                    ),
+                  );
+                } else {
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: rateHistory.length,
+                    itemBuilder: (context, index) {
+                      final rate = rateHistory[index];
+                      return Card(
+                        child: ListTile(
+                          title: Text(
+                            DateFormat('MMM d, yyyy').format(DateTime.parse(rate.date)),
+                          ),
+                          subtitle: Text('₹${rate.baseRate.toStringAsFixed(2)} per 100 eggs'),
+                          trailing: rate.date == today
+                              ? const Chip(label: Text('Today'))
+                              : null,
+                        ),
+                      );
+                    },
+                  );
+                }
+              }),
+            ),
+          ],
+        ),
       ),
     );
   }

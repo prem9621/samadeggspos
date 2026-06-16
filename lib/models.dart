@@ -2,6 +2,14 @@ import 'package:hive/hive.dart';
 
 part 'models.g.dart';
 
+@HiveType(typeId: 6)
+enum PartyType {
+  @HiveField(0)
+  customer,
+  @HiveField(1)
+  supplier
+}
+
 @HiveType(typeId: 0)
 class DailyRate extends HiveObject {
   @HiveField(0)
@@ -60,6 +68,9 @@ class Party extends HiveObject {
   @HiveField(7)
   DateTime updatedAt;
 
+  @HiveField(8)
+  PartyType type; // Customer or Supplier
+
   Party({
     required this.name,
     this.phone,
@@ -69,6 +80,7 @@ class Party extends HiveObject {
     this.notes,
     required this.createdAt,
     required this.updatedAt,
+    this.type = PartyType.customer,
   });
 
   factory Party.now({
@@ -78,6 +90,7 @@ class Party extends HiveObject {
     required String adjustmentType,
     required double adjustmentValue,
     String? notes,
+    PartyType type = PartyType.customer,
   }) {
     final now = DateTime.now();
     return Party(
@@ -89,6 +102,7 @@ class Party extends HiveObject {
       notes: notes,
       createdAt: now,
       updatedAt: now,
+      type: type,
     );
   }
 
@@ -248,6 +262,9 @@ class Payment extends HiveObject {
   @HiveField(5)
   DateTime updatedAt;
 
+  @HiveField(6)
+  String paymentType; // "received" (from customer) or "paid" (to supplier)
+
   Payment({
     required this.partyKey,
     required this.date,
@@ -255,6 +272,7 @@ class Payment extends HiveObject {
     this.notes,
     required this.createdAt,
     required this.updatedAt,
+    required this.paymentType,
   });
 
   factory Payment.now({
@@ -262,6 +280,7 @@ class Payment extends HiveObject {
     required String date,
     required double amount,
     String? notes,
+    required String paymentType,
   }) {
     final now = DateTime.now();
     return Payment(
@@ -271,6 +290,7 @@ class Payment extends HiveObject {
       notes: notes,
       createdAt: now,
       updatedAt: now,
+      paymentType: paymentType,
     );
   }
 }
@@ -280,4 +300,76 @@ class PaymentWithParty {
   final Party party;
 
   PaymentWithParty({required this.payment, required this.party});
+}
+
+@HiveType(typeId: 5)
+class Purchase extends HiveObject {
+  @HiveField(0)
+  int supplierKey;
+
+  @HiveField(1)
+  String purchaseDate;
+
+  @HiveField(2)
+  double eggQuantity;
+
+  @HiveField(3)
+  double baseRate;
+
+  @HiveField(4)
+  double adjustedRate;
+
+  @HiveField(5)
+  double amount;
+
+  @HiveField(6)
+  String? notes;
+
+  @HiveField(7)
+  DateTime createdAt;
+
+  @HiveField(8)
+  DateTime updatedAt;
+
+  Purchase({
+    required this.supplierKey,
+    required this.purchaseDate,
+    required this.eggQuantity,
+    required this.baseRate,
+    required this.adjustedRate,
+    required this.amount,
+    this.notes,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory Purchase.now({
+    required int supplierKey,
+    required String purchaseDate,
+    required double eggQuantity,
+    required double baseRate,
+    required double adjustedRate,
+    required double amount,
+    String? notes,
+  }) {
+    final now = DateTime.now();
+    return Purchase(
+      supplierKey: supplierKey,
+      purchaseDate: purchaseDate,
+      eggQuantity: eggQuantity,
+      baseRate: baseRate,
+      adjustedRate: adjustedRate,
+      amount: amount,
+      notes: notes,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+}
+
+class PurchaseWithSupplier {
+  final Purchase purchase;
+  final Party supplier;
+
+  PurchaseWithSupplier({required this.purchase, required this.supplier});
 }

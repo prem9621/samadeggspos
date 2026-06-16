@@ -115,50 +115,61 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sales History'),
-        actions: [
-          PopupMenuButton(
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                child: const ListTile(
-                  leading: Icon(Icons.date_range),
-                  title: Text('Filter by Date'),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Sales History',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _selectDate();
-                },
-              ),
-              PopupMenuItem(
-                child: const ListTile(
-                  leading: Icon(Icons.group),
-                  title: Text('Filter by Party'),
+                PopupMenuButton(
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      child: const ListTile(
+                        leading: Icon(Icons.date_range),
+                        title: Text('Filter by Date'),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _selectDate();
+                      },
+                    ),
+                    PopupMenuItem(
+                      child: const ListTile(
+                        leading: Icon(Icons.group),
+                        title: Text('Filter by Party'),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showPartyFilterDialog();
+                      },
+                    ),
+                    PopupMenuItem(
+                      child: const ListTile(
+                        leading: Icon(Icons.clear),
+                        title: Text('Clear Filters'),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() {
+                          selectedPartyFilter = null;
+                          selectedDateFilter = null;
+                        });
+                        _loadData();
+                      },
+                    ),
+                  ],
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showPartyFilterDialog();
-                },
-              ),
-              PopupMenuItem(
-                child: const ListTile(
-                  leading: Icon(Icons.clear),
-                  title: Text('Clear Filters'),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    selectedPartyFilter = null;
-                    selectedDateFilter = null;
-                  });
-                  _loadData();
-                },
-              ),
-            ],
+              ],
+            ),
           ),
-        ],
-      ),
-      body: RefreshIndicator(
+          Expanded(
+            child: RefreshIndicator(
         onRefresh: _loadData,
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -214,6 +225,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                           );
                         },
                       ),
+            ),
+          ),
+        ],
       ),
     );
   }

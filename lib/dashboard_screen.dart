@@ -67,17 +67,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(context.watch<AppState>().shopName ?? 'Samad Eggs POS'),
-        actions: [
-          IconButton(
-            icon: Icon(context.watch<AppState>().darkMode ? Icons.light_mode : Icons.dark_mode),
-            onPressed: () {
-              context.read<AppState>().toggleDarkMode();
-            },
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: isLoading

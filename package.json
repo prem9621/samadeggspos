@@ -1,0 +1,11 @@
+{
+  "name": "samad_eggs_pos",
+  "version": "1.0.0",
+  "description": "Samad Eggs POS",
+  "scripts": {
+    "build": "flutter build web --release --base-href \"/\""
+  },
+  "keywords": ["flutter", "pos"],
+  "author": "",
+  "license": "MIT"
+}

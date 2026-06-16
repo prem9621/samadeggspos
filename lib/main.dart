@@ -9,6 +9,7 @@ import 'sale_entry_screen.dart';
 import 'sales_history_screen.dart';
 import 'expenses_screen.dart';
 import 'settings_screen.dart';
+import 'purchase_entry_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,37 +101,141 @@ class _MainScreenState extends State<MainScreen> {
     const DailyRateScreen(),
     const PartiesScreen(),
     const SaleEntryScreen(),
+    const PurchaseEntryScreen(),
     const SalesHistoryScreen(),
     const ExpensesScreen(),
     const SettingsScreen(),
   ];
 
+  final List<String> _screenTitles = [
+    'Dashboard',
+    'Daily Rate',
+    'Parties',
+    'New Sale',
+    'New Purchase',
+    'Sales History',
+    'Expenses',
+    'Settings',
+  ];
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: Text(_screenTitles[context.watch<AppState>().selectedIndex]),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () {
+            _scaffoldKey.currentState?.openDrawer();
+          },
+        ),
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    context.watch<AppState>().shopName ?? 'Samad Eggs POS',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.dashboard),
+              title: const Text('Dashboard'),
+              selected: context.watch<AppState>().selectedIndex == 0,
+              onTap: () {
+                context.read<AppState>().setSelectedIndex(0);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.price_change),
+              title: const Text('Daily Rate'),
+              selected: context.watch<AppState>().selectedIndex == 1,
+              onTap: () {
+                context.read<AppState>().setSelectedIndex(1);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.group),
+              title: const Text('Parties'),
+              selected: context.watch<AppState>().selectedIndex == 2,
+              onTap: () {
+                context.read<AppState>().setSelectedIndex(2);
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add_shopping_cart),
+              title: const Text('New Sale'),
+              selected: context.watch<AppState>().selectedIndex == 3,
+              onTap: () {
+                context.read<AppState>().setSelectedIndex(3);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.shopping_bag),
+              title: const Text('New Purchase'),
+              selected: context.watch<AppState>().selectedIndex == 4,
+              onTap: () {
+                context.read<AppState>().setSelectedIndex(4);
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text('Sales History'),
+              selected: context.watch<AppState>().selectedIndex == 5,
+              onTap: () {
+                context.read<AppState>().setSelectedIndex(5);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.money_off),
+              title: const Text('Expenses'),
+              selected: context.watch<AppState>().selectedIndex == 6,
+              onTap: () {
+                context.read<AppState>().setSelectedIndex(6);
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text('Settings'),
+              selected: context.watch<AppState>().selectedIndex == 7,
+              onTap: () {
+                context.read<AppState>().setSelectedIndex(7);
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
       body: IndexedStack(
         index: context.watch<AppState>().selectedIndex,
         children: _screens,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: context.watch<AppState>().selectedIndex,
-        onDestinationSelected: (index) {
-          context.read<AppState>().setSelectedIndex(index);
-        },
-        destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          NavigationDestination(
-              icon: Icon(Icons.price_change), label: 'Rate'),
-          NavigationDestination(icon: Icon(Icons.group), label: 'Parties'),
-          NavigationDestination(
-              icon: Icon(Icons.add_shopping_cart), label: 'Sale'),
-          NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-          NavigationDestination(
-              icon: Icon(Icons.money_off), label: 'Expenses'),
-          NavigationDestination(
-              icon: Icon(Icons.settings), label: 'Settings'),
-        ],
       ),
     );
   }
