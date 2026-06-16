@@ -67,10 +67,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: RefreshIndicator(
         onRefresh: _loadDashboardData,
+        color: const Color(0xFF2563EB),
         child: isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
             : error != null
                 ? Center(
                     child: Padding(
@@ -80,8 +82,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           Text(
                             error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
                               fontSize: 16,
                             ),
                             textAlign: TextAlign.center,
@@ -89,6 +91,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                             onPressed: _loadDashboardData,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2563EB),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                             icon: const Icon(Icons.refresh),
                             label: const Text('Retry'),
                           ),
@@ -97,87 +107,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   )
                 : SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          'Good ${_getGreeting()}',
-                          style:
-                              Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Here\'s what\'s happening today',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withOpacity(0.6),
-                              ),
-                        ),
-                        const SizedBox(height: 24),
                         Card(
+                          color: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.all(24),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary
-                                            .withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      padding: const EdgeInsets.all(12),
-                                      child: Icon(
-                                        Icons.price_change,
-                                        color:
-                                            Theme.of(context).colorScheme.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            "Today's Rate",
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium,
+                                            'Today\'s Rate',
+                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              color: const Color(0xFF64748B),
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                           ),
-                                          const SizedBox(height: 4),
+                                          const SizedBox(height: 8),
                                           Text(
                                             todayRate != null
-                                                ? '₹${todayRate!.baseRate.toStringAsFixed(2)} per 100 eggs'
-                                                : 'No rate set for today',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .headlineSmall
-                                                ?.copyWith(
-                                                  color: todayRate != null
-                                                      ? Theme.of(context)
-                                                          .colorScheme
-                                                          .primary
-                                                      : Theme.of(context)
-                                                          .colorScheme
-                                                          .error,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                                ? '₹${todayRate!.baseRate.toStringAsFixed(2)}'
+                                                : 'Not set',
+                                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                              color: todayRate != null
+                                                  ? const Color(0xFF2563EB)
+                                                  : const Color(0xFFDC2626),
+                                              fontWeight: FontWeight.w700,
+                                            ),
                                           ),
                                         ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF6FF),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        Icons.price_change,
+                                        color: const Color(0xFF2563EB),
+                                        size: 32,
                                       ),
                                     ),
                                   ],
@@ -187,62 +170,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        Row(
+                        GridView.count(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
                           children: [
-                            Expanded(
-                              child: _buildStatCard(
-                                context,
-                                icon: Icons.egg,
-                                title: 'Eggs Sold',
-                                value: totalEggs.toStringAsFixed(0),
-                                color: Colors.amber,
-                              ),
+                            _buildStatCard(
+                              icon: Icons.egg,
+                              title: 'Eggs Sold',
+                              value: totalEggs.toStringAsFixed(0),
+                              iconColor: const Color(0xFFF59E0B),
+                              bgColor: const Color(0xFFFFF7ED),
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _buildStatCard(
-                                context,
-                                icon: Icons.currency_rupee,
-                                title: 'Total Revenue',
-                                value: '₹${totalRevenue.toStringAsFixed(2)}',
-                                color: Colors.green,
-                              ),
+                            _buildStatCard(
+                              icon: Icons.currency_rupee,
+                              title: 'Total Revenue',
+                              value: '₹${totalRevenue.toStringAsFixed(2)}',
+                              iconColor: const Color(0xFF10B981),
+                              bgColor: const Color(0xFFECFDF5),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildStatCard(
-                                context,
-                                icon: Icons.money_off,
-                                title: 'Total Expenses',
-                                value: '₹${totalExpenses.toStringAsFixed(2)}',
-                                color: Colors.red,
-                              ),
+                            _buildStatCard(
+                              icon: Icons.money_off,
+                              title: 'Total Expenses',
+                              value: '₹${totalExpenses.toStringAsFixed(2)}',
+                              iconColor: const Color(0xFFDC2626),
+                              bgColor: const Color(0xFFFEF2F2),
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _buildStatCard(
-                                context,
-                                icon: Icons.trending_up,
-                                title: 'Profit',
-                                value: '₹${totalProfit.toStringAsFixed(2)}',
-                                color: Colors.blue,
-                              ),
+                            _buildStatCard(
+                              icon: Icons.trending_up,
+                              title: 'Profit',
+                              value: '₹${totalProfit.toStringAsFixed(2)}',
+                              iconColor: const Color(0xFF2563EB),
+                              bgColor: const Color(0xFFEFF6FF),
                             ),
                           ],
                         ),
                         const SizedBox(height: 28),
                         Text(
                           'Quick Actions',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF1E293B),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         GridView.count(
@@ -261,20 +232,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             _QuickActionButton(
                               icon: Icons.add_shopping_cart,
-                              label: 'Add Sale',
+                              label: 'New Sale',
                               onTap: () {
                                 context.read<AppState>().setSelectedIndex(3);
                               },
                             ),
                             _QuickActionButton(
                               icon: Icons.shopping_bag,
-                              label: 'Add Purchase',
+                              label: 'New Purchase',
                               onTap: () {
                                 context.read<AppState>().setSelectedIndex(4);
                               },
                             ),
                             _QuickActionButton(
-                              icon: Icons.group,
+                              icon: Icons.people,
                               label: 'Parties',
                               onTap: () {
                                 context.read<AppState>().setSelectedIndex(2);
@@ -289,55 +260,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Morning';
-    if (hour < 17) return 'Afternoon';
-    return 'Evening';
-  }
-
-  Widget _buildStatCard(
-    BuildContext context, {
+  Widget _buildStatCard({
     required IconData icon,
     required String title,
     required String value,
-    required MaterialColor color,
+    required Color iconColor,
+    required Color bgColor,
   }) {
     return Card(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
+                color: bgColor,
+                borderRadius: BorderRadius.circular(14),
               ),
-              padding: const EdgeInsets.all(8),
               child: Icon(
                 icon,
-                color: color.shade700,
-                size: 24,
+                color: iconColor,
+                size: 28,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
               title,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.6),
-                  ),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF64748B),
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: color.shade700,
-                  ),
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                color: iconColor,
+              ),
             ),
           ],
         ),
@@ -360,32 +330,40 @@ class _QuickActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 padding: const EdgeInsets.all(12),
                 child: Icon(
                   icon,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 28,
+                  color: const Color(0xFF2563EB),
+                  size: 32,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Text(
                 label,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B),
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
