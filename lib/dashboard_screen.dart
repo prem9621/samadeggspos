@@ -16,10 +16,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final dbHelper = DatabaseHelper.instance;
   DailyRate? todayRate;
-  double totalEggs = 0.0;
-  double totalRevenue = 0.0;
-  double totalExpenses = 0.0;
-  double totalProfit = 0.0;
+  List<dynamic> todayTransactions = [];
   bool isLoading = true;
   String? error;
 
@@ -38,19 +35,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
       final rateResult = await dbHelper.getDailyRateByDate(today);
-      final eggsResult = await dbHelper.getTotalEggsSoldOnDate(today);
-      final revenueResult = await dbHelper.getTotalSalesAmountOnDate(today);
-      final expensesResult = await dbHelper.getTotalExpensesOnDate(today);
-      final profitResult = await dbHelper.getDailyProfit(today);
+      final salesResult = await dbHelper.getSalesByDate(today);
+      final purchasesResult = await dbHelper.getPurchasesByDate(today);
+      final paymentsResult = await dbHelper.getPaymentsByDate(today);
 
       if (!mounted) return;
 
+      final List<dynamic> transactions = [];
+      if (salesResult.data != null) {
+        transactions.addAll(salesResult.data!.map((saleWithParty) => {'type': 'sale', 'data': saleWithParty}));
+      }
+      if (purchasesResult.data != null) {
+        transactions.addAll(purchasesResult.data!.map((purchaseWithSupplier) => {'type': 'purchase', 'data': purchaseWithSupplier}));
+      }
+      if (paymentsResult.data != null) {
+        transactions.addAll(paymentsResult.data!.map((paymentWithParty) => {'type': 'payment', 'data': paymentWithParty}));
+      }
+
       setState(() {
         todayRate = rateResult.data;
-        totalEggs = eggsResult.data ?? 0.0;
-        totalRevenue = revenueResult.data ?? 0.0;
-        totalExpenses = expensesResult.data ?? 0.0;
-        totalProfit = profitResult.data ?? 0.0;
+        todayTransactions = transactions;
         isLoading = false;
       });
     } catch (e) {
@@ -169,206 +173,172 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        GridView.count(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          children: [
-                            _buildStatCard(
-                              icon: Icons.egg,
-                              title: 'Eggs Sold',
-                              value: totalEggs.toStringAsFixed(0),
-                              iconColor: const Color(0xFFF59E0B),
-                              bgColor: const Color(0xFFFFF7ED),
-                            ),
-                            _buildStatCard(
-                              icon: Icons.currency_rupee,
-                              title: 'Total Revenue',
-                              value: '₹${totalRevenue.toStringAsFixed(2)}',
-                              iconColor: const Color(0xFF10B981),
-                              bgColor: const Color(0xFFECFDF5),
-                            ),
-                            _buildStatCard(
-                              icon: Icons.money_off,
-                              title: 'Total Expenses',
-                              value: '₹${totalExpenses.toStringAsFixed(2)}',
-                              iconColor: const Color(0xFFDC2626),
-                              bgColor: const Color(0xFFFEF2F2),
-                            ),
-                            _buildStatCard(
-                              icon: Icons.trending_up,
-                              title: 'Profit',
-                              value: '₹${totalProfit.toStringAsFixed(2)}',
-                              iconColor: const Color(0xFF2563EB),
-                              bgColor: const Color(0xFFEFF6FF),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 28),
-                        Text(
-                          'Quick Actions',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1E293B),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Today\'s Transactions',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E293B),
                           ),
                         ),
                         const SizedBox(height: 16),
-                        GridView.count(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          children: [
-                            _QuickActionButton(
-                              icon: Icons.price_change,
-                              label: 'Update Rate',
-                              onTap: () {
-                                context.read<AppState>().setSelectedIndex(1);
-                              },
+                        if (todayTransactions.isEmpty)
+                          Card(
+                            color: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+                              borderRadius: BorderRadius.circular(24),
                             ),
-                            _QuickActionButton(
-                              icon: Icons.add_shopping_cart,
-                              label: 'New Sale',
-                              onTap: () {
-                                context.read<AppState>().setSelectedIndex(3);
-                              },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                              child: Column(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEFF6FF),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Icon(
+                                      Icons.receipt_long,
+                                      size: 48,
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'No transactions yet',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Add your first transaction',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: const Color(0xFF64748B).withOpacity(0.8),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            _QuickActionButton(
-                              icon: Icons.shopping_bag,
-                              label: 'New Purchase',
-                              onTap: () {
-                                context.read<AppState>().setSelectedIndex(4);
-                              },
-                            ),
-                            _QuickActionButton(
-                              icon: Icons.people,
-                              label: 'Parties',
-                              onTap: () {
-                                context.read<AppState>().setSelectedIndex(2);
-                              },
-                            ),
-                          ],
-                        ),
+                          )
+                        else
+                          ...todayTransactions.map((transaction) {
+                            final type = transaction['type'];
+                            final data = transaction['data'];
+
+                            String title;
+                            IconData icon;
+                            Color iconColor;
+                            Color bgColor;
+                            String amount;
+                            String? subtitle;
+
+                            if (type == 'sale') {
+                              final saleWithParty = data as SaleWithParty;
+                              title = 'Sale';
+                              icon = Icons.shopping_cart_outlined;
+                              iconColor = const Color(0xFF10B981);
+                              bgColor = const Color(0xFFECFDF5);
+                              amount = '+₹${saleWithParty.sale.amount.toStringAsFixed(2)}';
+                              subtitle = '${saleWithParty.sale.eggQuantity} eggs';
+                            } else if (type == 'purchase') {
+                              final purchaseWithSupplier = data as PurchaseWithSupplier;
+                              title = 'Purchase';
+                              icon = Icons.shopping_bag_outlined;
+                              iconColor = const Color(0xFFF59E0B);
+                              bgColor = const Color(0xFFFFF7ED);
+                              amount = '-₹${purchaseWithSupplier.purchase.amount.toStringAsFixed(2)}';
+                              subtitle = '${purchaseWithSupplier.purchase.eggQuantity} eggs';
+                            } else {
+                              final paymentWithParty = data as PaymentWithParty;
+                              title = 'Payment';
+                              icon = Icons.payment_outlined;
+                              iconColor = const Color(0xFF2563EB);
+                              bgColor = const Color(0xFFEFF6FF);
+                              amount = paymentWithParty.payment.paymentType == 'received'
+                                  ? '+₹${paymentWithParty.payment.amount.toStringAsFixed(2)}'
+                                  : '-₹${paymentWithParty.payment.amount.toStringAsFixed(2)}';
+                              subtitle = paymentWithParty.payment.paymentType == 'received'
+                                  ? 'Received'
+                                  : 'Paid';
+                            }
+
+                            return Card(
+                              color: Colors.white,
+                              elevation: 0,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              shape: RoundedRectangleBorder(
+                                side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: bgColor,
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Icon(
+                                        icon,
+                                        color: iconColor,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            title,
+                                            style: const TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF1E293B),
+                                            ),
+                                          ),
+                                          if (subtitle != null)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                subtitle,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Color(0xFF64748B),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      amount,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: amount.startsWith('+')
+                                            ? const Color(0xFF10B981)
+                                            : const Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
                       ],
                     ),
                   ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    required Color iconColor,
-    required Color bgColor,
-  }) {
-    return Card(
-      color: Colors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                icon,
-                color: iconColor,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF64748B),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w700,
-                color: iconColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _QuickActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: Colors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                padding: const EdgeInsets.all(12),
-                child: Icon(
-                  icon,
-                  color: const Color(0xFF2563EB),
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E293B),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -293,10 +293,6 @@ class _MainScreenState extends State<MainScreen> {
                       title: 'Parties',
                       index: 2,
                     ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Divider(color: Color(0xFFE2E8F0)),
-                    ),
                     _buildDrawerItem(
                       icon: Icons.shopping_cart_outlined,
                       title: 'New Sale',
@@ -307,10 +303,6 @@ class _MainScreenState extends State<MainScreen> {
                       title: 'New Purchase',
                       index: 4,
                     ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Divider(color: Color(0xFFE2E8F0)),
-                    ),
                     _buildDrawerItem(
                       icon: Icons.history_outlined,
                       title: 'Sales History',
@@ -320,10 +312,6 @@ class _MainScreenState extends State<MainScreen> {
                       icon: Icons.money_off_outlined,
                       title: 'Expenses',
                       index: 6,
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Divider(color: Color(0xFFE2E8F0)),
                     ),
                     _buildDrawerItem(
                       icon: Icons.settings_outlined,

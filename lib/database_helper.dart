@@ -249,6 +249,32 @@ class DatabaseHelper {
     }
   }
 
+  Future<DatabaseResult<List<PurchaseWithSupplier>>> getPurchasesByDate(String date) async {
+    try {
+      final result = await getAllPurchases();
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      final filtered = result.data?.where((p) => p.purchase.purchaseDate == date).toList() ?? [];
+      return DatabaseResult.success(filtered);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load purchases: $e');
+    }
+  }
+
+  Future<DatabaseResult<List<PaymentWithParty>>> getPaymentsByDate(String date) async {
+    try {
+      final result = await getAllPayments();
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      final filtered = result.data?.where((p) => p.payment.date == date).toList() ?? [];
+      return DatabaseResult.success(filtered);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to load payments: $e');
+    }
+  }
+
   Future<DatabaseResult<List<SaleWithParty>>> getSalesByParty(Party party) async {
     try {
       final result = await getAllSales();
