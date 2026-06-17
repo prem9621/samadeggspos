@@ -33,6 +33,7 @@ node_modules/
 .pub/
 /build/
 /coverage/
+/flutter/
 
 # Symbolication related
 app.*.symbols

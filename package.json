@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Samad Eggs POS",
   "scripts": {
-    "build": "flutter build web --release --base-href \"/\""
+    "install-flutter": "if [ -d \"flutter\" ]; then cd flutter && git pull && cd ..; else git clone -b stable https://github.com/flutter/flutter.git; fi",
+    "build": "bash -c \"flutter/bin/flutter pub get && flutter/bin/flutter build web --release --base-href '/'\""
   },
   "keywords": ["flutter", "pos"],
   "author": "",
