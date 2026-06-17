@@ -1,13 +1,15 @@
 {
   "version": 2,
-  "framework": null,
-  "installCommand": "npm run install-flutter",
-  "buildCommand": "npm run build",
-  "outputDirectory": "build/web",
-  "rewrites": [
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "build/web/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
