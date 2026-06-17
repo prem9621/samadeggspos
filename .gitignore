@@ -33,9 +33,6 @@ node_modules/
 .pub/
 /build/
 /coverage/
-# Keep build/web for Vercel deployment
-!/build/web/
-!/build/web/**
 
 # Symbolication related
 app.*.symbols

@@ -13,18 +13,20 @@ import 'settings_screen.dart';
 import 'purchase_entry_screen.dart';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-const kAmber = Color(0xFFD97706);       // Primary – egg-gold
-const kAmberLight = Color(0xFFFEF3C7);  // Amber tint
-const kAmberDark = Color(0xFFB45309);   // Pressed state
-const kSurface = Color(0xFFFAFAF9);     // App background
-const kCard = Color(0xFFFFFFFF);        // Card background
-const kBorder = Color(0xFFE7E5E4);      // Subtle borders
-const kText = Color(0xFF1C1917);        // Primary text
-const kTextSub = Color(0xFF78716C);     // Secondary text
-const kTextMuted = Color(0xFFA8A29E);   // Muted / placeholder
-const kGreen = Color(0xFF16A34A);       // Credit / received
-const kRed = Color(0xFFDC2626);         // Debit / paid / error
-const kBlue = Color(0xFF2563EB);        // Info accent
+const kBlue     = Color(0xFF2563EB);   // Primary – buttons, active
+const kBlueDark = Color(0xFF1D4ED8);   // Pressed
+const kBlueLight= Color(0xFFEFF6FF);   // Blue tint bg
+const kAmber    = Color(0xFFD97706);   // Egg-gold accent
+const kAmberLight=Color(0xFFFEF3C7);
+const kAmberDark= Color(0xFFB45309);
+const kSurface  = Color(0xFFF8F9FA);
+const kCard     = Color(0xFFFFFFFF);
+const kBorder   = Color(0xFFE9ECEF);
+const kText     = Color(0xFF1A1A2E);
+const kTextSub  = Color(0xFF6C757D);
+const kTextMuted= Color(0xFFADB5BD);
+const kGreen    = Color(0xFF16A34A);
+const kRed      = Color(0xFFDC2626);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,16 +35,9 @@ void main() async {
     statusBarIconBrightness: Brightness.dark,
   ));
   await DatabaseHelper.init();
-
   final appState = AppState();
   await appState.loadSettings();
-
-  runApp(
-    ChangeNotifierProvider.value(
-      value: appState,
-      child: const MyApp(),
-    ),
-  );
+  runApp(ChangeNotifierProvider.value(value: appState, child: const MyApp()));
 }
 
 class AppState extends ChangeNotifier {
@@ -58,7 +53,7 @@ class AppState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _shopName = prefs.getString('shop_name');
     _darkMode = prefs.getBool('dark_mode') ?? false;
-    _selectedIndex = prefs.getInt('selected_index') ?? 0;
+    _selectedIndex = 0;
     notifyListeners();
   }
 
@@ -92,9 +87,9 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: kAmber,
+          seedColor: kBlue,
           brightness: Brightness.light,
-          primary: kAmber,
+          primary: kBlue,
           onPrimary: Colors.white,
           surface: kSurface,
         ),
@@ -102,68 +97,66 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: kSurface,
         fontFamily: 'Roboto',
         textTheme: const TextTheme(
-          displayLarge: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: kText),
-          headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: kText),
-          headlineSmall: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: kText),
-          titleLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kText),
-          titleMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: kText),
-          bodyLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: kText),
-          bodyMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: kTextSub),
-          bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: kTextMuted),
-          labelLarge: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kText),
-          labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: kTextMuted),
+          displayLarge:  TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: kText),
+          headlineMedium:TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kText),
+          headlineSmall: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kText),
+          titleLarge:    TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: kText),
+          titleMedium:   TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: kText),
+          bodyLarge:     TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: kText),
+          bodyMedium:    TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: kTextSub),
+          bodySmall:     TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: kTextMuted),
+          labelLarge:    TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+          labelSmall:    TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: kTextMuted),
         ),
         cardTheme: CardThemeData(
           color: kCard,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             side: const BorderSide(color: kBorder),
           ),
           margin: EdgeInsets.zero,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: kAmber,
+            backgroundColor: kBlue,
             foregroundColor: Colors.white,
             elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: kCard,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(9),
             borderSide: const BorderSide(color: kBorder),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(9),
             borderSide: const BorderSide(color: kBorder),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: kAmber, width: 1.5),
+            borderRadius: BorderRadius.circular(9),
+            borderSide: const BorderSide(color: kBlue, width: 1.5),
           ),
-          labelStyle: const TextStyle(fontSize: 13, color: kTextSub),
-          hintStyle: const TextStyle(fontSize: 13, color: kTextMuted),
+          labelStyle: const TextStyle(fontSize: 12, color: kTextSub),
+          hintStyle: const TextStyle(fontSize: 12, color: kTextMuted),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: kBlue,
+          foregroundColor: Colors.white,
+          elevation: 2,
         ),
       ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-            seedColor: kAmber, brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
-      themeMode: context.watch<AppState>().darkMode ? ThemeMode.dark : ThemeMode.light,
       home: const MainScreen(),
     );
   }
 }
 
-// ─── Nav Item Model ───────────────────────────────────────────────────────────
 class _NavItem {
   final IconData icon;
   final IconData activeIcon;
@@ -173,44 +166,38 @@ class _NavItem {
 }
 
 const _navItems = [
-  _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home', 0),
-  _NavItem(Icons.egg_outlined, Icons.egg_rounded, 'Rate', 1),
-  _NavItem(Icons.people_outline, Icons.people_rounded, 'Parties', 2),
-  _NavItem(Icons.point_of_sale_outlined, Icons.point_of_sale_rounded, 'Sale', 3),
-  _NavItem(Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Purchase', 4),
-  _NavItem(Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'History', 5),
-  _NavItem(Icons.account_balance_wallet_outlined, Icons.account_balance_wallet_rounded, 'Expenses', 6),
-  _NavItem(Icons.settings_outlined, Icons.settings_rounded, 'Settings', 7),
+  _NavItem(Icons.home_outlined,                    Icons.home_rounded,                   'Home',     0),
+  _NavItem(Icons.egg_outlined,                     Icons.egg_rounded,                    'Rate',     1),
+  _NavItem(Icons.people_outline,                   Icons.people_rounded,                 'Parties',  2),
+  _NavItem(Icons.point_of_sale_outlined,           Icons.point_of_sale_rounded,          'Sale',     3),
+  _NavItem(Icons.shopping_bag_outlined,            Icons.shopping_bag_rounded,           'Purchase', 4),
+  _NavItem(Icons.receipt_long_outlined,            Icons.receipt_long_rounded,           'History',  5),
+  _NavItem(Icons.account_balance_wallet_outlined,  Icons.account_balance_wallet_rounded, 'Expenses', 6),
+  _NavItem(Icons.settings_outlined,                Icons.settings_rounded,               'Settings', 7),
+];
+
+const _screenTitles = [
+  'Today\'s Overview', 'Egg Rate', 'Parties',
+  'New Sale', 'New Purchase', 'Sales History',
+  'Expenses', 'Settings',
 ];
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
-
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  final List<Widget> _screens = [
-    const DashboardScreen(),
-    const DailyRateScreen(),
-    const PartiesScreen(),
-    const SaleEntryScreen(),
-    const PurchaseEntryScreen(),
-    const SalesHistoryScreen(),
-    const ExpensesScreen(),
-    const SettingsScreen(),
-  ];
-
-  final _screenTitles = [
-    'Today\'s Overview',
-    'Egg Rate',
-    'Parties',
-    'New Sale',
-    'New Purchase',
-    'Sales History',
-    'Expenses',
-    'Settings',
+  final List<Widget> _screens = const [
+    DashboardScreen(),
+    DailyRateScreen(),
+    PartiesScreen(),
+    SaleEntryScreen(),
+    PurchaseEntryScreen(),
+    SalesHistoryScreen(),
+    ExpensesScreen(),
+    SettingsScreen(),
   ];
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -218,16 +205,12 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final idx = context.watch<AppState>().selectedIndex;
-
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: kSurface,
       appBar: _buildAppBar(idx),
       drawer: _buildDrawer(idx),
-      body: IndexedStack(
-        index: idx,
-        children: _screens,
-      ),
+      body: IndexedStack(index: idx, children: _screens),
     );
   }
 
@@ -247,30 +230,27 @@ class _MainScreenState extends State<MainScreen> {
       ),
       titleSpacing: 0,
       leading: IconButton(
-        icon: const Icon(Icons.menu_rounded, color: kText, size: 22),
+        icon: const Icon(Icons.menu_rounded, color: kText, size: 20),
         onPressed: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       title: Row(
         children: [
           Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(
-              color: kAmberLight,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.egg_rounded, color: kAmber, size: 18),
+            width: 28, height: 28,
+            decoration: BoxDecoration(color: kAmberLight, borderRadius: BorderRadius.circular(7)),
+            child: const Icon(Icons.egg_rounded, color: kAmber, size: 16),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 9),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 context.watch<AppState>().shopName ?? 'Samad Eggs',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kText),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kText),
               ),
               Text(
                 _screenTitles[idx],
-                style: const TextStyle(fontSize: 11, color: kTextSub, fontWeight: FontWeight.w400),
+                style: const TextStyle(fontSize: 10, color: kTextSub, fontWeight: FontWeight.w400),
               ),
             ],
           ),
@@ -286,30 +266,26 @@ class _MainScreenState extends State<MainScreen> {
       child: SafeArea(
         child: Column(
           children: [
-            // Header
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
               child: Row(
                 children: [
                   Container(
-                    width: 44, height: 44,
-                    decoration: BoxDecoration(
-                      color: kAmber,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.egg_rounded, color: Colors.white, size: 24),
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(color: kBlue, borderRadius: BorderRadius.circular(11)),
+                    child: const Icon(Icons.egg_rounded, color: Colors.white, size: 22),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           context.watch<AppState>().shopName ?? 'Samad Eggs',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kText),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kText),
                         ),
                         const Text('POS System v1.0',
-                          style: TextStyle(fontSize: 11, color: kTextSub)),
+                          style: TextStyle(fontSize: 10, color: kTextSub)),
                       ],
                     ),
                   ),
@@ -317,10 +293,10 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
             Container(height: 1, color: kBorder),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 children: _navItems.map((item) => _buildNavTile(item, idx)).toList(),
               ),
             ),
@@ -333,42 +309,39 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildNavTile(_NavItem item, int currentIdx) {
     final isSelected = currentIdx == item.index;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Material(
-        color: isSelected ? kAmberLight : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        color: isSelected ? kBlueLight : Colors.transparent,
+        borderRadius: BorderRadius.circular(9),
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(9),
           onTap: () {
             context.read<AppState>().setSelectedIndex(item.index);
             Navigator.pop(context);
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
             child: Row(
               children: [
                 Icon(
                   isSelected ? item.activeIcon : item.icon,
-                  color: isSelected ? kAmber : kTextSub,
-                  size: 20,
+                  color: isSelected ? kBlue : kTextSub,
+                  size: 19,
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Text(
                   item.label,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected ? kAmber : kText,
+                    color: isSelected ? kBlue : kText,
                   ),
                 ),
                 if (isSelected) ...[
                   const Spacer(),
                   Container(
                     width: 5, height: 5,
-                    decoration: const BoxDecoration(
-                      color: kAmber,
-                      shape: BoxShape.circle,
-                    ),
+                    decoration: const BoxDecoration(color: kBlue, shape: BoxShape.circle),
                   ),
                 ],
               ],

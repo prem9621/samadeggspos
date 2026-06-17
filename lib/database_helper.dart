@@ -81,6 +81,19 @@ class DatabaseHelper {
     }
   }
 
+  /// Convenience: get or create/update today's rate in one call.
+  /// Lets the home screen's single-line rate editor save without caring
+  /// whether a rate for today already exists.
+  Future<DatabaseResult<DailyRate>> setTodayRate(double baseRate) async {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final existing = await getDailyRateByDate(today);
+    if (existing.success && existing.data != null) {
+      existing.data!.baseRate = baseRate;
+      return updateDailyRate(existing.data!);
+    }
+    return insertDailyRate(DailyRate.now(today, baseRate));
+  }
+
   Future<DatabaseResult<DailyRate?>> getDailyRateByDate(String date) async {
     try {
       final box = await Hive.openBox<DailyRate>(boxDailyRates);
@@ -88,6 +101,11 @@ class DatabaseHelper {
     } catch (e) {
       return DatabaseResult.failure('Failed to load rate: $e');
     }
+  }
+
+  Future<DatabaseResult<DailyRate?>> getTodayRate() async {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return getDailyRateByDate(today);
   }
 
   Future<DatabaseResult<List<DailyRate>>> getAllDailyRates() async {
@@ -175,6 +193,13 @@ class DatabaseHelper {
       return DatabaseResult.failure('Failed to load parties: $e');
     }
   }
+
+  /// Used directly by the Sale screen instead of fetching all parties
+  /// and filtering manually every time it loads.
+  Future<DatabaseResult<List<Party>>> getAllCustomers() => getPartiesByType(PartyType.customer);
+
+  /// Used directly by the Purchase screen.
+  Future<DatabaseResult<List<Party>>> getAllSuppliers() => getPartiesByType(PartyType.supplier);
 
   Future<DatabaseResult<List<Party>>> searchParties(String query) async {
     try {
@@ -525,6 +550,38 @@ class DatabaseHelper {
       return DatabaseResult.success(balance);
     } catch (e) {
       return DatabaseResult.failure('Failed to calculate balance: $e');
+    }
+  }
+
+  /// Batch version of getPartyBalance for every party in one pass.
+  /// The old Parties screen called getPartyBalance() once per party in
+  /// a loop, which re-fetches and re-filters ALL sales/purchases/payments
+  /// from scratch for every single party. Fine with a handful of parties,
+  /// but it scales badly and is the most likely reason the Parties list
+  /// can feel slow as your data grows. This walks each box exactly once
+  /// and accumulates totals by key.
+  Future<DatabaseResult<Map<dynamic, double>>> getAllPartyBalances() async {
+    try {
+      final saleBox = await Hive.openBox<Sale>(boxSales);
+      final purchaseBox = await Hive.openBox<Purchase>(boxPurchases);
+      final paymentBox = await Hive.openBox<Payment>(boxPayments);
+
+      final Map<dynamic, double> balances = {};
+
+      for (final sale in saleBox.values) {
+        balances[sale.partyKey] = (balances[sale.partyKey] ?? 0) + sale.amount;
+      }
+      for (final purchase in purchaseBox.values) {
+        balances[purchase.supplierKey] = (balances[purchase.supplierKey] ?? 0) - purchase.amount;
+      }
+      for (final payment in paymentBox.values) {
+        final delta = payment.paymentType == 'received' ? -payment.amount : payment.amount;
+        balances[payment.partyKey] = (balances[payment.partyKey] ?? 0) + delta;
+      }
+
+      return DatabaseResult.success(balances);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to calculate balances: $e');
     }
   }
 

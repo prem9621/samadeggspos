@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'models.dart';
 import 'database_helper.dart';
+import 'main.dart';
 
 class PartyLedgerScreen extends StatefulWidget {
   final Party party;
@@ -31,10 +32,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
   }
 
   Future<void> _loadTransactions() async {
-    setState(() {
-      isLoading = true;
-      error = null;
-    });
+    setState(() { isLoading = true; error = null; });
     try {
       final salesResult = await dbHelper.getSalesByParty(widget.party);
       final purchasesResult = await dbHelper.getPurchasesBySupplier(widget.party);
@@ -50,10 +48,9 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
           ...paymentsResult.data?.map((p) => {'type': 'payment', 'data': p}).toList() ?? [],
         ];
 
-        // Sort by date
         allTransactions.sort((a, b) {
-          final dateA = _getTransactionDate(a);
-          final dateB = _getTransactionDate(b);
+          final dateA = _getCreatedAt(a);
+          final dateB = _getCreatedAt(b);
           return dateB.compareTo(dateA);
         });
 
@@ -71,24 +68,19 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
     } catch (e) {
       debugPrint('Ledger load error: $e');
       if (mounted) {
-        setState(() {
-          isLoading = false;
-          error = 'Failed to load ledger: $e';
-        });
+        setState(() { isLoading = false; error = 'Failed to load ledger: $e'; });
       }
     }
   }
 
-  DateTime _getTransactionDate(Map<String, dynamic> t) {
+  // Used for sorting — actual createdAt timestamp (has time), not just the date string.
+  DateTime _getCreatedAt(Map<String, dynamic> t) {
     if (t['type'] == 'sale') {
-      final s = t['data'] as SaleWithParty;
-      return DateFormat('yyyy-MM-dd').parse(s.sale.saleDate);
+      return (t['data'] as SaleWithParty).sale.createdAt;
     } else if (t['type'] == 'purchase') {
-      final p = t['data'] as PurchaseWithSupplier;
-      return DateFormat('yyyy-MM-dd').parse(p.purchase.purchaseDate);
+      return (t['data'] as PurchaseWithSupplier).purchase.createdAt;
     } else {
-      final p = t['data'] as PaymentWithParty;
-      return DateFormat('yyyy-MM-dd').parse(p.payment.date);
+      return (t['data'] as PaymentWithParty).payment.createdAt;
     }
   }
 
@@ -100,125 +92,147 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
 
     if (!mounted) return;
 
-    await showDialog(
+    await showModalBottomSheet(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Add Payment'),
-          content: SingleChildScrollView(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Container(
+          decoration: const BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                StatefulBuilder(
-                  builder: (context, setDateState) => ListTile(
-                    title: Text(
-                      DateFormat('MMM d, yyyy').format(selectedDate),
-                    ),
-                    leading: const Icon(Icons.calendar_today),
-                    onTap: () async {
-                      final DateTime? picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null && picked != selectedDate) {
-                        setDateState(() {
-                          selectedDate = picked;
-                        });
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: paymentType,
-                  decoration: const InputDecoration(
-                    labelText: 'Payment Type',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'received', child: Text('Received')),
-                    DropdownMenuItem(value: 'paid', child: Text('Paid')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setDialogState(() {
-                        paymentType = value;
-                      });
-                    }
+                Center(child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: kBorder,
+                    borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 18),
+                const Text('Add Payment',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kText)),
+                const SizedBox(height: 16),
+
+                // Date picker row
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setSheet(() => selectedDate = picked);
                   },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: kSurface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: kBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today_rounded, size: 14, color: kAmber),
+                        const SizedBox(width: 10),
+                        Text(DateFormat('d MMM yyyy').format(selectedDate),
+                          style: const TextStyle(fontSize: 13, color: kText)),
+                        const Spacer(),
+                        const Icon(Icons.chevron_right_rounded, size: 16, color: kTextMuted),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Payment type — clean chips, not a dropdown
+                const Text('Payment Type', style: TextStyle(fontSize: 11.5, color: kTextSub)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ChoiceChip(
+                        label: 'Received', selected: paymentType == 'received',
+                        onTap: () => setSheet(() => paymentType = 'received'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ChoiceChip(
+                        label: 'Paid', selected: paymentType == 'paid',
+                        onTap: () => setSheet(() => paymentType = 'paid'),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
+
                 TextField(
                   controller: amountController,
+                  autofocus: true,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kAmber),
                   decoration: const InputDecoration(
-                    labelText: 'Amount (₹)',
-                    border: OutlineInputBorder(),
+                    labelText: 'Amount',
+                    prefixText: '₹ ',
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 TextField(
                   controller: notesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes (Optional)',
-                    border: OutlineInputBorder(),
-                  ),
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(labelText: 'Notes (Optional)'),
                   maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final amount = double.tryParse(amountController.text);
+                      final notes = notesController.text.trim().isEmpty
+                          ? null
+                          : notesController.text.trim();
+
+                      if (amount == null || amount <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a valid amount')));
+                        return;
+                      }
+
+                      final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
+                      final newPayment = Payment.now(
+                        partyKey: widget.party.key as int,
+                        date: dateStr,
+                        amount: amount,
+                        notes: notes,
+                        paymentType: paymentType,
+                      );
+                      final result = await dbHelper.insertPayment(newPayment);
+                      if (result.success) {
+                        if (mounted) {
+                          Navigator.pop(ctx);
+                          _loadTransactions();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Payment added')));
+                        }
+                      } else {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(result.error ?? 'Failed to add payment')));
+                        }
+                      }
+                    },
+                    child: const Text('Save Payment'),
+                  ),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final amount = double.tryParse(amountController.text);
-                final notes = notesController.text.trim().isEmpty
-                    ? null
-                    : notesController.text.trim();
-
-                if (amount == null || amount <= 0) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter a valid amount')),
-                    );
-                  }
-                  return;
-                }
-
-                final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
-                final newPayment = Payment.now(
-                  partyKey: widget.party.key as int,
-                  date: dateStr,
-                  amount: amount,
-                  notes: notes,
-                  paymentType: paymentType,
-                );
-                final result = await dbHelper.insertPayment(newPayment);
-                if (result.success) {
-                  if (mounted) {
-                    Navigator.pop(dialogContext);
-                    _loadTransactions();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Payment added successfully!')),
-                    );
-                  }
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(result.error ?? 'Failed to add payment')),
-                    );
-                  }
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
         ),
       ),
     );
@@ -234,25 +248,19 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(
-                'Party Statement',
-                style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
-              ),
+              pw.Text('Party Statement',
+                style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 16),
               pw.Text('Party Name: ${widget.party.name}'),
               if (widget.party.phone != null) pw.Text('Phone: ${widget.party.phone}'),
               if (widget.party.address != null) pw.Text('Address: ${widget.party.address}'),
               pw.SizedBox(height: 8),
-              pw.Text(
-                'Current Balance: ₹${currentBalance.abs().toStringAsFixed(2)}',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-              ),
+              pw.Text('Current Balance: ₹${currentBalance.abs().toStringAsFixed(2)}',
+                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 24),
               pw.TableHelper.fromTextArray(
-                headers: ['Date', 'Type', 'Description', 'Amount'],
-                data: transactions.map((t) {
-                  return _getTransactionRow(t);
-                }).toList(),
+                headers: ['Date', 'Time', 'Type', 'Description', 'Amount'],
+                data: transactions.map((t) => _getTransactionRow(t)).toList(),
               ),
             ],
           );
@@ -260,101 +268,101 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
       ),
     );
 
-    // Save PDF
     final output = await getTemporaryDirectory();
     final file = File('${output.path}/statement.pdf');
     await file.writeAsBytes(await pdf.save());
 
-    // Share
     Share.shareXFiles([XFile(file.path)], text: 'Party statement for ${widget.party.name}');
   }
 
   List<String> _getTransactionRow(Map<String, dynamic> t) {
+    final createdAt = _getCreatedAt(t);
+    final dateStr = DateFormat('MMM d, yyyy').format(createdAt);
+    final timeStr = DateFormat('h:mm a').format(createdAt);
+
     if (t['type'] == 'sale') {
       final s = t['data'] as SaleWithParty;
-      return [
-        DateFormat('MMM d, yyyy').format(DateFormat('yyyy-MM-dd').parse(s.sale.saleDate)),
-        'Sale',
-        '${s.sale.eggQuantity.toStringAsFixed(0)} eggs',
-        '+₹${s.sale.amount.toStringAsFixed(2)}'
-      ];
+      return [dateStr, timeStr, 'Sale', '${s.sale.eggQuantity.toStringAsFixed(0)} eggs',
+        '+₹${s.sale.amount.toStringAsFixed(2)}'];
     } else if (t['type'] == 'purchase') {
       final p = t['data'] as PurchaseWithSupplier;
-      return [
-        DateFormat('MMM d, yyyy').format(DateFormat('yyyy-MM-dd').parse(p.purchase.purchaseDate)),
-        'Purchase',
-        '${p.purchase.eggQuantity.toStringAsFixed(0)} eggs',
-        '-₹${p.purchase.amount.toStringAsFixed(2)}'
-      ];
+      return [dateStr, timeStr, 'Purchase', '${p.purchase.eggQuantity.toStringAsFixed(0)} eggs',
+        '-₹${p.purchase.amount.toStringAsFixed(2)}'];
     } else {
       final p = t['data'] as PaymentWithParty;
       final desc = p.payment.paymentType == 'received' ? 'Received' : 'Paid';
       final amount = p.payment.paymentType == 'received'
           ? '-₹${p.payment.amount.toStringAsFixed(2)}'
           : '+₹${p.payment.amount.toStringAsFixed(2)}';
-      return [
-        DateFormat('MMM d, yyyy').format(DateFormat('yyyy-MM-dd').parse(p.payment.date)),
-        'Payment',
-        desc,
-        amount
-      ];
+      return [dateStr, timeStr, 'Payment', desc, amount];
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: kSurface,
       appBar: AppBar(
-        title: Text(widget.party.name),
+        backgroundColor: kCard,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: kText,
+        title: Text(widget.party.name,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kText)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: kBorder),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
+            icon: const Icon(Icons.picture_as_pdf_rounded, size: 20, color: kTextSub),
             onPressed: _shareStatement,
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showPaymentDialog,
+        backgroundColor: kAmber,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.payment_rounded),
+      ),
       body: Column(
         children: [
+          // Balance card — single clean line, no red box
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-            ),
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            color: kCard,
             child: Column(
               children: [
-                Text(
-                  'Current Balance',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '₹${currentBalance.abs().toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
+                const Text('Current Balance',
+                  style: TextStyle(fontSize: 11.5, color: kTextSub, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 4),
+                Text('₹${currentBalance.abs().toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: kText)),
+                const SizedBox(height: 2),
                 Text(
                   currentBalance > 0
                       ? 'You will get'
                       : currentBalance < 0
                           ? 'You have to pay'
-                          : 'No balance',
+                          : 'No balance due',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                    color: currentBalance > 0 ? kGreen : currentBalance < 0 ? kRed : kTextSub,
                   ),
                 ),
               ],
             ),
           ),
+          Container(height: 1, color: kBorder),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadTransactions,
+              color: kAmber,
               child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: CircularProgressIndicator(color: kAmber))
                   : error != null
                       ? Center(
                           child: Padding(
@@ -362,18 +370,13 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  error!,
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.error,
-                                    fontSize: 16,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 16),
+                                Text(error!,
+                                  style: const TextStyle(color: kTextSub, fontSize: 12),
+                                  textAlign: TextAlign.center),
+                                const SizedBox(height: 14),
                                 ElevatedButton.icon(
                                   onPressed: _loadTransactions,
-                                  icon: const Icon(Icons.refresh),
+                                  icon: const Icon(Icons.refresh_rounded, size: 15),
                                   label: const Text('Retry'),
                                 ),
                               ],
@@ -382,101 +385,107 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
                         )
                       : transactions.isEmpty
                           ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(32),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.receipt_long,
-                                      size: 64,
-                                      color: Theme.of(context).colorScheme.outline,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'No transactions yet',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(width: 52, height: 52,
+                                    decoration: BoxDecoration(color: kAmberLight,
+                                      borderRadius: BorderRadius.circular(14)),
+                                    child: const Icon(Icons.receipt_long_rounded,
+                                      color: kAmber, size: 26)),
+                                  const SizedBox(height: 12),
+                                  const Text('No transactions yet',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                                      color: kText)),
+                                ],
                               ),
                             )
                           : ListView.builder(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
                               itemCount: transactions.length,
                               itemBuilder: (context, index) {
                                 final t = transactions[index];
-                                String date;
-                                String type;
-                                String desc;
-                                String amount;
-                                Color amountColor;
+                                final createdAt = _getCreatedAt(t);
+                                final dateLabel = DateFormat('d MMM yyyy').format(createdAt);
+                                final timeLabel = DateFormat('h:mm a').format(createdAt);
+
+                                String type, desc, amount;
+                                Color amtColor, iconColor, iconBg;
                                 IconData icon;
-                                Color iconColor;
 
                                 if (t['type'] == 'sale') {
                                   final s = t['data'] as SaleWithParty;
-                                  date = DateFormat('MMM d, yyyy').format(DateFormat('yyyy-MM-dd').parse(s.sale.saleDate));
                                   type = 'Sale';
                                   desc = '${s.sale.eggQuantity.toStringAsFixed(0)} eggs';
                                   amount = '+₹${s.sale.amount.toStringAsFixed(2)}';
-                                  amountColor = Colors.green;
-                                  icon = Icons.shopping_cart;
-                                  iconColor = Colors.green;
+                                  amtColor = kGreen;
+                                  icon = Icons.trending_up_rounded;
+                                  iconColor = kGreen;
+                                  iconBg = const Color(0xFFDCFCE7);
                                 } else if (t['type'] == 'purchase') {
                                   final p = t['data'] as PurchaseWithSupplier;
-                                  date = DateFormat('MMM d, yyyy').format(DateFormat('yyyy-MM-dd').parse(p.purchase.purchaseDate));
                                   type = 'Purchase';
                                   desc = '${p.purchase.eggQuantity.toStringAsFixed(0)} eggs';
                                   amount = '-₹${p.purchase.amount.toStringAsFixed(2)}';
-                                  amountColor = Colors.red;
-                                  icon = Icons.shopping_bag;
-                                  iconColor = Colors.red;
+                                  amtColor = kRed;
+                                  icon = Icons.trending_down_rounded;
+                                  iconColor = kRed;
+                                  iconBg = const Color(0xFFFEE2E2);
                                 } else {
                                   final p = t['data'] as PaymentWithParty;
-                                  date = DateFormat('MMM d, yyyy').format(DateFormat('yyyy-MM-dd').parse(p.payment.date));
                                   type = 'Payment';
                                   desc = p.payment.paymentType == 'received' ? 'Received' : 'Paid';
-                                  if (p.payment.notes != null) {
-                                    desc += ' - ${p.payment.notes}';
-                                  }
+                                  if (p.payment.notes != null) desc += ' · ${p.payment.notes}';
                                   amount = p.payment.paymentType == 'received'
                                       ? '-₹${p.payment.amount.toStringAsFixed(2)}'
                                       : '+₹${p.payment.amount.toStringAsFixed(2)}';
-                                  amountColor = p.payment.paymentType == 'received' ? Colors.red : Colors.green;
-                                  icon = Icons.payment;
-                                  iconColor = p.payment.paymentType == 'received' ? Colors.red : Colors.green;
+                                  amtColor = p.payment.paymentType == 'received' ? kRed : kGreen;
+                                  icon = Icons.swap_horiz_rounded;
+                                  iconColor = p.payment.paymentType == 'received' ? kRed : kGreen;
+                                  iconBg = p.payment.paymentType == 'received'
+                                      ? const Color(0xFFFEE2E2) : const Color(0xFFDCFCE7);
                                 }
 
-                                return Card(
-                                  shape: RoundedRectangleBorder(
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: kCard,
                                     borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: kBorder),
                                   ),
-                                  child: ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundColor: iconColor.withValues(alpha: 0.1),
-                                      child: Icon(icon, color: iconColor),
-                                    ),
-                                    title: Text(type, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(date),
-                                        Text(desc),
-                                      ],
-                                    ),
-                                    trailing: Text(
-                                      amount,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: amountColor,
-                                        fontSize: 16,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 36, height: 36,
+                                        decoration: BoxDecoration(
+                                          color: iconBg, borderRadius: BorderRadius.circular(9)),
+                                        child: Icon(icon, color: iconColor, size: 18),
                                       ),
-                                    ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(type, style: const TextStyle(
+                                              fontSize: 13, fontWeight: FontWeight.w600, color: kText)),
+                                            const SizedBox(height: 1),
+                                            Text(desc, style: const TextStyle(
+                                              fontSize: 11, color: kTextSub)),
+                                          ],
+                                        ),
+                                      ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(amount, style: TextStyle(
+                                            fontSize: 13.5, fontWeight: FontWeight.w700, color: amtColor)),
+                                          const SizedBox(height: 1),
+                                          Text('$dateLabel · $timeLabel', style: const TextStyle(
+                                            fontSize: 10.5, color: kTextMuted)),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 );
                               },
@@ -485,10 +494,32 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showPaymentDialog,
-        child: const Icon(Icons.payment),
-      ),
     );
   }
+}
+
+class _ChoiceChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ChoiceChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: selected ? kAmber : kSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: selected ? kAmber : kBorder),
+      ),
+      child: Text(label, style: TextStyle(
+        fontSize: 12.5, fontWeight: FontWeight.w600,
+        color: selected ? Colors.white : kTextSub,
+      )),
+    ),
+  );
 }

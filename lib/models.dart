@@ -42,6 +42,10 @@ class DailyRate extends HiveObject {
   }
 }
 
+/// Supported rate adjustment modes for a party.
+/// "=" same as base rate, "+"/"-" flat rupee amount, "+%"/"-%" percentage.
+const List<String> kAdjustmentModes = ['=', '+', '-', '+%', '-%'];
+
 @HiveType(typeId: 1)
 class Party extends HiveObject {
   @HiveField(0)
@@ -106,21 +110,47 @@ class Party extends HiveObject {
     );
   }
 
+  /// Returns the rate this party actually pays/receives for a given
+  /// day's base rate, after applying their adjustment.
   double calculateAdjustedRate(double baseRate) {
     switch (adjustmentType) {
       case '+':
         return baseRate + adjustmentValue;
       case '-':
-        return baseRate - adjustmentValue;
+        final result = baseRate - adjustmentValue;
+        return result < 0 ? 0 : result;
       case '+%':
         return baseRate * (1 + adjustmentValue / 100);
       case '-%':
-        return baseRate * (1 - adjustmentValue / 100);
+        final result = baseRate * (1 - adjustmentValue / 100);
+        return result < 0 ? 0 : result;
       case '=':
       default:
         return baseRate;
     }
   }
+
+  /// Short display label for the adjustment, e.g. "+10%", "-₹5", "=".
+  /// Centralised here so every screen/widget shows the exact same text
+  /// instead of each file re-implementing its own switch statement.
+  String get adjustmentLabel {
+    switch (adjustmentType) {
+      case '+':
+        return '+₹${adjustmentValue.toStringAsFixed(adjustmentValue % 1 == 0 ? 0 : 2)}';
+      case '-':
+        return '-₹${adjustmentValue.toStringAsFixed(adjustmentValue % 1 == 0 ? 0 : 2)}';
+      case '+%':
+        return '+${adjustmentValue.toStringAsFixed(adjustmentValue % 1 == 0 ? 0 : 1)}%';
+      case '-%':
+        return '-${adjustmentValue.toStringAsFixed(adjustmentValue % 1 == 0 ? 0 : 1)}%';
+      case '=':
+      default:
+        return '=';
+    }
+  }
+
+  /// True if this party has any adjustment away from the base rate.
+  bool get hasAdjustment => adjustmentType != '=' && adjustmentValue != 0;
 }
 
 @HiveType(typeId: 2)

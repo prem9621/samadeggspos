@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'main.dart';
-import 'database_helper.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,7 +12,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _shopNameController = TextEditingController();
-  final dbHelper = DatabaseHelper.instance;
 
   @override
   void initState() {
@@ -29,18 +27,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _backupDatabase() async {
-    try {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Backup/restore not implemented for Hive yet')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup failed: $e')),
-        );
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup/restore not implemented yet')));
     }
   }
 
@@ -48,8 +37,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Restore Database'),
-        content: const Text('This will replace current data. Are you sure?'),
+        title: const Text('Restore Database', style: TextStyle(fontSize: 15)),
+        content: const Text('This will replace current data. Are you sure?',
+          style: TextStyle(fontSize: 13)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -57,99 +47,156 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error),
+            style: TextButton.styleFrom(foregroundColor: kRed),
             child: const Text('Restore'),
           ),
         ],
       ),
     );
-    if (confirm == true) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Restore requires file picker (not implemented yet)')),
-        );
-      }
+    if (confirm == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Restore requires file picker (not implemented yet)')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: kSurface,
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Shop Name',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _shopNameController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Enter shop name',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
+          // Shop name card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Shop Name',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kText)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _shopNameController,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(hintText: 'Enter shop name'),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
                     onPressed: () async {
-                      await context
-                          .read<AppState>()
-                          .setShopName(_shopNameController.text.trim());
+                      await context.read<AppState>().setShopName(_shopNameController.text.trim());
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Shop name saved')),
-                        );
+                          const SnackBar(content: Text('Shop name saved')));
                       }
                     },
                     child: const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Dark mode
+          Container(
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kBorder),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      color: kAmberLight, borderRadius: BorderRadius.circular(9)),
+                    child: const Icon(Icons.dark_mode_rounded, size: 18, color: kAmber),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text('Dark Mode',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kText)),
+                  ),
+                  Switch(
+                    value: context.watch<AppState>().darkMode,
+                    activeThumbColor: kAmber,
+                    onChanged: (_) async {
+                      await context.read<AppState>().toggleDarkMode();
+                    },
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.dark_mode),
-              title: const Text('Dark Mode'),
-              trailing: Switch(
-                value: context.watch<AppState>().darkMode,
-                onChanged: (_) async {
-                  await context.read<AppState>().toggleDarkMode();
-                },
-              ),
-            ),
-          ),
-          // FIX: backup/restore use dart:io and don't work on the web build
+
           if (!kIsWeb) ...[
-            const SizedBox(height: 16),
-            Card(
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                color: kCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: kBorder),
+              ),
               child: Column(
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.backup),
-                    title: const Text('Backup Database'),
+                  _SettingsTile(
+                    icon: Icons.backup_rounded,
+                    label: 'Backup Database',
                     onTap: _backupDatabase,
                   ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.restore),
-                    title: const Text('Restore Database'),
+                  const Divider(height: 1, color: kBorder, indent: 14, endIndent: 14),
+                  _SettingsTile(
+                    icon: Icons.restore_rounded,
+                    label: 'Restore Database',
                     onTap: _restoreDatabase,
                   ),
                 ],
               ),
             ),
           ],
+
+          const SizedBox(height: 14),
+          Center(
+            child: Text('Samad Eggs POS · v1.0',
+              style: const TextStyle(fontSize: 11, color: kTextMuted)),
+          ),
         ],
       ),
     );
   }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _SettingsTile({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: kTextSub),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(label, style: const TextStyle(
+              fontSize: 13, fontWeight: FontWeight.w500, color: kText)),
+          ),
+          const Icon(Icons.chevron_right_rounded, size: 18, color: kTextMuted),
+        ],
+      ),
+    ),
+  );
 }

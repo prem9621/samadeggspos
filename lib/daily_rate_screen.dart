@@ -30,8 +30,11 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        if (result.success) rateHistory = result.data ?? [];
-        else error = result.error;
+        if (result.success) {
+          rateHistory = result.data ?? [];
+        } else {
+          error = result.error;
+        }
       });
     } catch (e) {
       if (mounted) setState(() { isLoading = false; error = 'Failed to load: $e'; });
