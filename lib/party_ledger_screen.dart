@@ -1,13 +1,14 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:file_saver/file_saver.dart';
 import 'models.dart';
 import 'database_helper.dart';
 import 'main.dart';
+import 'Party_statement.pdf.dart';
 
 class PartyLedgerScreen extends StatefulWidget {
   final Party party;
@@ -24,6 +25,7 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
   double currentBalance = 0.0;
   bool isLoading = true;
   String? error;
+  bool isGeneratingPdf = false;
 
   @override
   void initState() {
@@ -238,63 +240,142 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
     );
   }
 
-  Future<void> _shareStatement() async {
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('Party Statement',
-                style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 16),
-              pw.Text('Party Name: ${widget.party.name}'),
-              if (widget.party.phone != null) pw.Text('Phone: ${widget.party.phone}'),
-              if (widget.party.address != null) pw.Text('Address: ${widget.party.address}'),
-              pw.SizedBox(height: 8),
-              pw.Text('Current Balance: ₹${currentBalance.abs().toStringAsFixed(2)}',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 24),
-              pw.TableHelper.fromTextArray(
-                headers: ['Date', 'Time', 'Type', 'Description', 'Amount'],
-                data: transactions.map((t) => _getTransactionRow(t)).toList(),
-              ),
-            ],
-          );
-        },
+  Future<void> _handlePdfOptions() async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(child: Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: kBorder,
+                borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 24),
+            const Text('Party Statement',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kText)),
+            const SizedBox(height: 8),
+            Text('What would you like to do with the statement?',
+              style: TextStyle(fontSize: 12, color: kTextSub), textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kAmber,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.save_alt_rounded, size: 18),
+                    label: const Text('Save PDF',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _savePdf();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.share_rounded, size: 18),
+                    label: const Text('Share PDF',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _sharePdf();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
-
-    final output = await getTemporaryDirectory();
-    final file = File('${output.path}/statement.pdf');
-    await file.writeAsBytes(await pdf.save());
-
-    Share.shareXFiles([XFile(file.path)], text: 'Party statement for ${widget.party.name}');
   }
 
-  List<String> _getTransactionRow(Map<String, dynamic> t) {
-    final createdAt = _getCreatedAt(t);
-    final dateStr = DateFormat('MMM d, yyyy').format(createdAt);
-    final timeStr = DateFormat('h:mm a').format(createdAt);
+  Future<Uint8List> _generatePdfBytes() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final result = await generatePartyStatementPdf(
+      party: widget.party,
+      shopName: appState.shopName,
+    );
+    return await result.file.readAsBytes();
+  }
 
-    if (t['type'] == 'sale') {
-      final s = t['data'] as SaleWithParty;
-      return [dateStr, timeStr, 'Sale', '${s.sale.eggQuantity.toStringAsFixed(0)} eggs',
-        '+₹${s.sale.amount.toStringAsFixed(2)}'];
-    } else if (t['type'] == 'purchase') {
-      final p = t['data'] as PurchaseWithSupplier;
-      return [dateStr, timeStr, 'Purchase', '${p.purchase.eggQuantity.toStringAsFixed(0)} eggs',
-        '-₹${p.purchase.amount.toStringAsFixed(2)}'];
-    } else {
-      final p = t['data'] as PaymentWithParty;
-      final desc = p.payment.paymentType == 'received' ? 'Received' : 'Paid';
-      final amount = p.payment.paymentType == 'received'
-          ? '-₹${p.payment.amount.toStringAsFixed(2)}'
-          : '+₹${p.payment.amount.toStringAsFixed(2)}';
-      return [dateStr, timeStr, 'Payment', desc, amount];
+  Future<void> _savePdf() async {
+    setState(() => isGeneratingPdf = true);
+    try {
+      final pdfBytes = await _generatePdfBytes();
+      final safeName = widget.party.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final fileName = 'Statement_${safeName}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
+      
+      await FileSaver.instance.saveFile(
+        name: fileName,
+        bytes: pdfBytes,
+        ext: 'pdf',
+        mimeType: MimeType.pdf,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF saved successfully!')));
+      }
+    } catch (e) {
+      debugPrint('Save PDF error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save PDF: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isGeneratingPdf = false);
+      }
+    }
+  }
+
+  Future<void> _sharePdf() async {
+    setState(() => isGeneratingPdf = true);
+    try {
+      final pdfBytes = await _generatePdfBytes();
+      final safeName = widget.party.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final fileName = 'Statement_${safeName}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+      
+      // First save to temp file for sharing
+      final tempDir = await Directory.systemTemp.createTemp();
+      final tempFile = File('${tempDir.path}/$fileName');
+      await tempFile.writeAsBytes(pdfBytes);
+
+      if (mounted) {
+        await Share.shareXFiles(
+          [XFile(tempFile.path)],
+          text: 'Statement for ${widget.party.name}',
+        );
+      }
+    } catch (e) {
+      debugPrint('Share PDF error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to share PDF: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isGeneratingPdf = false);
+      }
     }
   }
 
@@ -315,10 +396,19 @@ class _PartyLedgerScreenState extends State<PartyLedgerScreen> {
           child: Container(height: 1, color: kBorder),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_rounded, size: 20, color: kTextSub),
-            onPressed: _shareStatement,
-          ),
+          isGeneratingPdf
+            ? const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: kAmber),
+                ),
+              )
+            : IconButton(
+                icon: const Icon(Icons.picture_as_pdf_rounded, size: 20, color: kTextSub),
+                onPressed: _handlePdfOptions,
+              ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
