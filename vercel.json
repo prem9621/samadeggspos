@@ -1,19 +1,11 @@
 {
   "version": 2,
-  "builds": [
+  "buildCommand": "npm run build",
+  "outputDirectory": "build/web",
+  "rewrites": [
     {
-      "src": "build/web/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "build/web/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "build/web/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

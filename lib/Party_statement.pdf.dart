@@ -1,6 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
@@ -32,16 +31,16 @@ class _LedgerEntry {
 }
 
 class PartyStatementResult {
-  final File file;
+  final Uint8List bytes;
   final double finalBalance;
-  PartyStatementResult({required this.file, required this.finalBalance});
+  PartyStatementResult({required this.bytes, required this.finalBalance});
 }
 
 /// Builds a complete ledger for [party] — every sale, purchase, and
 /// payment, in date order, each showing the rate actually used for
 /// that transaction and a running balance — then renders it as a PDF
-/// invoice-style statement and saves it to the app's documents
-/// directory, ready to be shared via [shareStatement].
+/// invoice-style statement and returns the PDF bytes, ready to save or
+/// share from mobile and web.
 ///
 /// Balance sign convention matches DatabaseHelper.getPartyBalance:
 /// positive = party owes the shop (shop is "to receive"),
@@ -61,43 +60,49 @@ Future<PartyStatementResult> generatePartyStatementPdf({
   final entries = <_LedgerEntry>[];
 
   for (final s in salesR.data ?? []) {
-    entries.add(_LedgerEntry(
-      date: DateFormat('yyyy-MM-dd').parse(s.sale.saleDate),
-      type: 'Sale',
-      quantity: s.sale.eggQuantity,
-      rate: s.sale.adjustedRate,
-      amount: s.sale.amount,
-      signedAmount: s.sale.amount, // sale increases what party owes us
-      notes: s.sale.notes,
-    ));
+    entries.add(
+      _LedgerEntry(
+        date: DateFormat('yyyy-MM-dd').parse(s.sale.saleDate),
+        type: 'Sale',
+        quantity: s.sale.eggQuantity,
+        rate: s.sale.adjustedRate,
+        amount: s.sale.amount,
+        signedAmount: s.sale.amount, // sale increases what party owes us
+        notes: s.sale.notes,
+      ),
+    );
   }
 
   for (final p in purchasesR.data ?? []) {
-    entries.add(_LedgerEntry(
-      date: DateFormat('yyyy-MM-dd').parse(p.purchase.purchaseDate),
-      type: 'Purchase',
-      quantity: p.purchase.eggQuantity,
-      rate: p.purchase.adjustedRate,
-      amount: p.purchase.amount,
-      signedAmount: -p.purchase.amount, // purchase reduces what they owe us
-      notes: p.purchase.notes,
-    ));
+    entries.add(
+      _LedgerEntry(
+        date: DateFormat('yyyy-MM-dd').parse(p.purchase.purchaseDate),
+        type: 'Purchase',
+        quantity: p.purchase.eggQuantity,
+        rate: p.purchase.adjustedRate,
+        amount: p.purchase.amount,
+        signedAmount: -p.purchase.amount, // purchase reduces what they owe us
+        notes: p.purchase.notes,
+      ),
+    );
   }
 
   for (final pay in paymentsR.data ?? []) {
     final isReceived = pay.payment.paymentType == 'received';
-    entries.add(_LedgerEntry(
-      date: DateFormat('yyyy-MM-dd').parse(pay.payment.date),
-      type: isReceived ? 'Payment In' : 'Payment Out',
-      quantity: 0,
-      rate: 0,
-      amount: pay.payment.amount,
-      // payment received from party reduces what they owe us;
-      // payment paid to party increases what they owe us — mirrors
-      // the sign convention in DatabaseHelper.getPartyBalance
-      signedAmount: isReceived ? -pay.payment.amount : pay.payment.amount,
-      notes: pay.payment.notes,
-    ));
+    entries.add(
+      _LedgerEntry(
+        date: DateFormat('yyyy-MM-dd').parse(pay.payment.date),
+        type: isReceived ? 'Payment In' : 'Payment Out',
+        quantity: 0,
+        rate: 0,
+        amount: pay.payment.amount,
+        // payment received from party reduces what they owe us;
+        // payment paid to party increases what they owe us — mirrors
+        // the sign convention in DatabaseHelper.getPartyBalance
+        signedAmount: isReceived ? -pay.payment.amount : pay.payment.amount,
+        notes: pay.payment.notes,
+      ),
+    );
   }
 
   entries.sort((a, b) => a.date.compareTo(b.date));
@@ -132,10 +137,18 @@ Future<PartyStatementResult> generatePartyStatementPdf({
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text(shopName ?? 'Samad Eggs',
-                    style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(
+                    shopName ?? 'Samad Eggs',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
                   if (shopAddress != null)
-                    pw.Text(shopAddress, style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text(
+                      shopAddress,
+                      style: const pw.TextStyle(fontSize: 9),
+                    ),
                   if (shopPhone != null)
                     pw.Text(shopPhone, style: const pw.TextStyle(fontSize: 9)),
                 ],
@@ -143,9 +156,17 @@ Future<PartyStatementResult> generatePartyStatementPdf({
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 children: [
-                  pw.Text('STATEMENT',
-                    style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                  pw.Text(dateGenerated, style: const pw.TextStyle(fontSize: 9)),
+                  pw.Text(
+                    'STATEMENT',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    dateGenerated,
+                    style: const pw.TextStyle(fontSize: 9),
+                  ),
                 ],
               ),
             ],
@@ -163,20 +184,45 @@ Future<PartyStatementResult> generatePartyStatementPdf({
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text(party.name,
-                      style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                    if (party.phone != null) pw.Text(party.phone!, style: const pw.TextStyle(fontSize: 9)),
-                    if (party.address != null) pw.Text(party.address!, style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text(
+                      party.name,
+                      style: pw.TextStyle(
+                        fontSize: 13,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    if (party.phone != null)
+                      pw.Text(
+                        party.phone!,
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    if (party.address != null)
+                      pw.Text(
+                        party.address!,
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
                   ],
                 ),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text(party.type == PartyType.customer ? 'Customer' : 'Supplier',
-                      style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    pw.Text(
+                      party.type == PartyType.customer
+                          ? 'Customer'
+                          : 'Supplier',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
                     if (party.hasAdjustment)
-                      pw.Text('Rate adjustment: ${party.adjustmentLabel}',
-                        style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                      pw.Text(
+                        'Rate adjustment: ${party.adjustmentLabel}',
+                        style: const pw.TextStyle(
+                          fontSize: 9,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
                   ],
                 ),
               ],
@@ -197,16 +243,27 @@ Future<PartyStatementResult> generatePartyStatementPdf({
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(vertical: 30),
             child: pw.Center(
-              child: pw.Text('No transactions recorded yet.',
-                style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
+              child: pw.Text(
+                'No transactions recorded yet.',
+                style: const pw.TextStyle(
+                  fontSize: 11,
+                  color: PdfColors.grey600,
+                ),
+              ),
             ),
           )
         else
           pw.TableHelper.fromTextArray(
             headers: ['Date', 'Type', 'Qty', 'Rate', 'Amount', 'Balance'],
             data: rows,
-            headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+            headerStyle: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+            ),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColors.blueGrey800,
+            ),
             cellStyle: const pw.TextStyle(fontSize: 9),
             cellAlignments: {
               0: pw.Alignment.centerLeft,
@@ -225,14 +282,19 @@ Future<PartyStatementResult> generatePartyStatementPdf({
               5: const pw.FlexColumnWidth(1.8),
             },
             rowDecoration: const pw.BoxDecoration(
-              border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5)),
+              border: pw.Border(
+                bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+              ),
             ),
           ),
         pw.SizedBox(height: 18),
         pw.Container(
           alignment: pw.Alignment.centerRight,
           child: pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const pw.EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 10,
+            ),
             decoration: pw.BoxDecoration(
               color: PdfColors.grey100,
               borderRadius: pw.BorderRadius.circular(4),
@@ -242,11 +304,17 @@ Future<PartyStatementResult> generatePartyStatementPdf({
               children: [
                 pw.Text(
                   running >= 0 ? 'Balance Receivable: ' : 'Balance Payable: ',
-                  style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
                 pw.Text(
                   'Rs.${running.abs().toStringAsFixed(2)}',
-                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -256,20 +324,19 @@ Future<PartyStatementResult> generatePartyStatementPdf({
     ),
   );
 
-  final dir = await getApplicationDocumentsDirectory();
-  final safeName = party.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-  final fileName = 'Statement_${safeName}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
-  final file = File('${dir.path}/$fileName');
-  await file.writeAsBytes(await pdf.save());
-
-  return PartyStatementResult(file: file, finalBalance: running);
+  return PartyStatementResult(bytes: await pdf.save(), finalBalance: running);
 }
 
 /// Opens the native share sheet so the user can send the generated PDF
 /// via WhatsApp, email, or save it wherever they like.
-Future<void> shareStatement(PartyStatementResult result, {required String partyName}) async {
-  await Share.shareXFiles(
-    [XFile(result.file.path)],
-    text: 'Statement for $partyName',
-  );
+Future<void> shareStatement(
+  PartyStatementResult result, {
+  required String partyName,
+}) async {
+  final safeName = partyName.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+  final fileName =
+      'Statement_${safeName}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+  await Share.shareXFiles([
+    XFile.fromData(result.bytes, name: fileName, mimeType: 'application/pdf'),
+  ], text: 'Statement for $partyName');
 }

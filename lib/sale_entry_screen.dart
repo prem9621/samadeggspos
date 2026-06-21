@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'models.dart';
 import 'database_helper.dart';
 import 'main.dart';
@@ -24,12 +25,27 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   bool isLoading = true;
   bool isSaving = false;
   String? error;
+  int? _lastRateRevision;
 
   @override
   void initState() {
     super.initState();
     _loadData();
     _quantityController.addListener(_calculateAmount);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final revision = context.watch<AppState>().rateRevision;
+    if (_lastRateRevision == null) {
+      _lastRateRevision = revision;
+      return;
+    }
+    if (_lastRateRevision != revision) {
+      _lastRateRevision = revision;
+      _loadData();
+    }
   }
 
   @override
@@ -40,76 +56,110 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() { isLoading = true; error = null; });
+    setState(() {
+      isLoading = true;
+      error = null;
+    });
     try {
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final rateR = await dbHelper.getDailyRateByDate(today);
-      final partyR = await dbHelper.getAllParties();
+      final rateR = await dbHelper.getTodayRate();
+      final partyR = await dbHelper.getAllCustomers();
       if (!mounted) return;
       setState(() {
         isLoading = false;
         todayRate = rateR.data;
-        parties = partyR.data?.where((p) => p.type == PartyType.customer).toList() ?? [];
+        parties = partyR.data ?? [];
         error = rateR.success && partyR.success ? null : (rateR.error ?? partyR.error);
       });
+      _calculateAmount();
     } catch (e) {
-      if (mounted) setState(() { isLoading = false; error = 'Failed: $e'; });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          error = 'Failed: $e';
+        });
+      }
     }
   }
 
   void _calculateAmount() {
     if (selectedParty == null || todayRate == null) {
-      setState(() { adjustedRate = 0; totalAmount = 0; });
+      setState(() {
+        adjustedRate = 0;
+        totalAmount = 0;
+      });
       return;
     }
     final qty = double.tryParse(_quantityController.text) ?? 0.0;
-    // calculateAdjustedRate uses Party.adjustmentType and Party.adjustmentValue
-    // to apply +, -, +%, -% or = against today's base rate.
     adjustedRate = selectedParty!.calculateAdjustedRate(todayRate!.baseRate);
-    // baseRate is per 100 eggs, so amount = adjustedRate * qty / 100
     totalAmount = (adjustedRate * qty) / 100;
     setState(() {});
   }
 
   Future<void> _saveSale() async {
     if (selectedParty == null) {
-      _snack('Please select a customer'); return;
+      _snack('Please select a customer');
+      return;
     }
-    if (todayRate == null) {
-      _snack('Please set today\'s rate first'); return;
+    final latestRate = await _loadLatestRateForSave();
+    if (latestRate == null) {
+      _snack('Please set today\'s rate first');
+      return;
     }
     final qty = double.tryParse(_quantityController.text);
     if (qty == null || qty <= 0) {
-      _snack('Enter a valid quantity'); return;
+      _snack('Enter a valid quantity');
+      return;
     }
 
     setState(() => isSaving = true);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final result = await dbHelper.insertSale(Sale.now(
-      partyKey: selectedParty!.key as int,
-      saleDate: today,
-      eggQuantity: qty,
-      baseRate: todayRate!.baseRate,
-      adjustedRate: adjustedRate,
-      amount: totalAmount,
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-    ));
+    final saleRate = selectedParty!.calculateAdjustedRate(latestRate.baseRate);
+    final saleAmount = (saleRate * qty) / 100;
+    final result = await dbHelper.insertSale(
+      Sale.now(
+        partyKey: selectedParty!.key as int,
+        saleDate: today,
+        eggQuantity: qty,
+        baseRate: latestRate.baseRate,
+        adjustedRate: saleRate,
+        amount: saleAmount,
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+      ),
+    );
 
     setState(() => isSaving = false);
     if (result.success) {
       _quantityController.clear();
       _notesController.clear();
-      setState(() { selectedParty = null; adjustedRate = 0; totalAmount = 0; });
+      setState(() {
+        selectedParty = null;
+        adjustedRate = 0;
+        totalAmount = 0;
+      });
       _snack('Sale saved successfully!');
     } else {
       _snack(result.error ?? 'Failed to save');
     }
   }
 
+  Future<DailyRate?> _loadLatestRateForSave() async {
+    final rateR = await dbHelper.getTodayRate();
+    if (rateR.success && mounted) {
+      setState(() {
+        todayRate = rateR.data;
+      });
+      _calculateAmount();
+    }
+    return rateR.data;
+  }
+
   void _snack(String msg) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg, style: const TextStyle(fontSize: 12))));
+        SnackBar(content: Text(msg, style: const TextStyle(fontSize: 12))),
+      );
     }
   }
 
@@ -127,25 +177,40 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: EdgeInsets.fromLTRB(
-              20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(child: Container(width: 36, height: 4,
-                  decoration: BoxDecoration(color: kBorder,
-                    borderRadius: BorderRadius.circular(2)))),
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: kBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 18),
-                const Text('Add Customer',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                const Text(
+                  'Add Customer',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: nameCtrl,
                   autofocus: true,
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
-                    labelText: 'Name', hintText: 'Enter party name'),
+                    labelText: 'Name',
+                    hintText: 'Enter party name',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -153,7 +218,9 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                   style: const TextStyle(fontSize: 13),
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
-                    labelText: 'Phone (optional)', hintText: '10-digit number'),
+                    labelText: 'Phone (optional)',
+                    hintText: '10-digit number',
+                  ),
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
@@ -163,16 +230,21 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                       final name = nameCtrl.text.trim();
                       if (name.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Enter party name')));
+                          const SnackBar(content: Text('Enter party name')),
+                        );
                         return;
                       }
-                      final r = await dbHelper.insertParty(Party.now(
-                        name: name,
-                        phone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
-                        adjustmentType: '=',
-                        adjustmentValue: 0,
-                        type: PartyType.customer,
-                      ));
+                      final r = await dbHelper.insertParty(
+                        Party.now(
+                          name: name,
+                          phone: phoneCtrl.text.trim().isEmpty
+                              ? null
+                              : phoneCtrl.text.trim(),
+                          adjustmentType: '=',
+                          adjustmentValue: 0,
+                          type: PartyType.customer,
+                        ),
+                      );
                       if (r.success && mounted) {
                         Navigator.pop(ctx);
                         await _loadData();
@@ -206,26 +278,38 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator(color: kAmber))
           : error != null
-              ? Center(child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Text(error!, style: const TextStyle(color: kRed, fontSize: 12)),
-                    const SizedBox(height: 14),
-                    ElevatedButton.icon(onPressed: _loadData,
-                      icon: const Icon(Icons.refresh_rounded, size: 15),
-                      label: const Text('Retry')),
-                  ])))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          error!,
+                          style: const TextStyle(color: kRed, fontSize: 12),
+                        ),
+                        const SizedBox(height: 14),
+                        ElevatedButton.icon(
+                          onPressed: _loadData,
+                          icon: const Icon(Icons.refresh_rounded, size: 15),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (todayRate == null)
-                        const _WarningBanner(msg: 'Set today\'s rate before adding a sale')
+                        const _WarningBanner(
+                          msg: 'Set today\'s rate before adding a sale',
+                        )
                       else
                         _RateBanner(rate: todayRate!),
                       const SizedBox(height: 14),
-
                       const _SectionLabel('Customer'),
                       const SizedBox(height: 6),
                       PartySelectField(
@@ -239,7 +323,6 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         onAddNew: _addPartyInline,
                       ),
                       const SizedBox(height: 14),
-
                       const _SectionLabel('Egg Quantity'),
                       const SizedBox(height: 6),
                       TextField(
@@ -253,7 +336,6 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-
                       const _SectionLabel('Notes (Optional)'),
                       const SizedBox(height: 6),
                       TextField(
@@ -262,23 +344,15 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         style: const TextStyle(fontSize: 13, color: kText),
                         decoration: const InputDecoration(hintText: 'Any remarks...'),
                       ),
-
-                      // Show the amount summary card as soon as a party AND
-                      // today's rate are both set, even before qty is entered,
-                      // so the user can see what rate will be applied.
                       if (selectedParty != null && todayRate != null) ...[
                         const SizedBox(height: 16),
                         _AmountSummary(
                           baseRate: todayRate!.baseRate,
                           adjustedRate: adjustedRate,
-                          // Use Party.adjustmentLabel so the format is identical
-                          // everywhere: "+₹25", "-10%", "=" etc.
                           adjustmentLabel: selectedParty!.adjustmentLabel,
-                          hasAdjustment: selectedParty!.hasAdjustment,
                           total: totalAmount,
                         ),
                       ],
-
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
@@ -286,9 +360,13 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                           onPressed: isSaving ? null : _saveSale,
                           child: isSaving
                               ? const SizedBox(
-                                  width: 16, height: 16,
+                                  width: 16,
+                                  height: 16,
                                   child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
                               : const Text('Save Sale'),
                         ),
                       ),
@@ -299,15 +377,20 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   }
 }
 
-// ─── Shared Widgets ───────────────────────────────────────────────────────────
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
 
   @override
-  Widget build(BuildContext context) => Text(text,
-    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600,
-      color: kTextSub, letterSpacing: 0.3));
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w600,
+          color: kTextSub,
+          letterSpacing: 0.3,
+        ),
+      );
 }
 
 class _WarningBanner extends StatelessWidget {
@@ -316,21 +399,25 @@ class _WarningBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFEF2F2),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFFFECACA)),
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.info_outline_rounded, color: kTextSub, size: 15),
-        const SizedBox(width: 8),
-        Expanded(child: Text(msg,
-          style: const TextStyle(fontSize: 11.5, color: kTextSub))),
-      ],
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFFECACA)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: kTextSub, size: 15),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                msg,
+                style: const TextStyle(fontSize: 11.5, color: kTextSub),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _RateBanner extends StatelessWidget {
@@ -339,81 +426,103 @@ class _RateBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-    decoration: BoxDecoration(
-      color: kAmberLight,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFFFDE68A)),
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.egg_rounded, color: kAmber, size: 15),
-        const SizedBox(width: 8),
-        Text('Today\'s rate: ₹${rate.baseRate.toStringAsFixed(2)} per 100 eggs',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kAmberDark)),
-      ],
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: kAmberLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFFDE68A)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.egg_rounded, color: kAmber, size: 15),
+            const SizedBox(width: 8),
+            Text(
+              'Today\'s rate: ₹${rate.baseRate.toStringAsFixed(2)} per 100 eggs',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: kAmberDark,
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _AmountSummary extends StatelessWidget {
-  final double baseRate, adjustedRate, total;
+  final double baseRate;
+  final double adjustedRate;
+  final double total;
   final String adjustmentLabel;
-  final bool hasAdjustment;
 
   const _AmountSummary({
     required this.baseRate,
     required this.adjustedRate,
     required this.adjustmentLabel,
-    required this.hasAdjustment,
     required this.total,
   });
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: kCard,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: kBorder),
-    ),
-    child: Column(
-      children: [
-        // Always show base rate and the party's adjustment so the user
-        // can see exactly what is being applied even before qty is typed.
-        _Row('Base Rate', '₹${baseRate.toStringAsFixed(2)} per 100 eggs'),
-        _Row('Party Adjustment', adjustmentLabel),
-        _Row('Sale Rate', '₹${adjustedRate.toStringAsFixed(2)} per 100 eggs'),
-        const Divider(height: 14, color: kBorder),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kBorder),
+        ),
+        child: Column(
           children: [
-            const Text('Total Amount',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: kText)),
-            Text(
-              total > 0 ? '₹${total.toStringAsFixed(2)}' : '—',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kAmber),
+            _Row('Base Rate', '₹${baseRate.toStringAsFixed(2)} per 100 eggs'),
+            _Row('Party Adjustment', adjustmentLabel),
+            _Row('Sale Rate', '₹${adjustedRate.toStringAsFixed(2)} per 100 eggs'),
+            const Divider(height: 14, color: kBorder),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Total Amount',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: kText,
+                  ),
+                ),
+                Text(
+                  total > 0 ? '₹${total.toStringAsFixed(2)}' : '—',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: kAmber,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-      ],
-    ),
-  );
+      );
 }
 
 class _Row extends StatelessWidget {
-  final String label, value;
+  final String label;
+  final String value;
   const _Row(this.label, this.value);
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 11.5, color: kTextSub)),
-        Text(value, style: const TextStyle(fontSize: 11.5, color: kText, fontWeight: FontWeight.w500)),
-      ],
-    ),
-  );
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 11.5, color: kTextSub)),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: kText,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
 }

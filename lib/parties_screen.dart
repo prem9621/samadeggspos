@@ -36,24 +36,35 @@ class _PartiesScreenState extends State<PartiesScreen>
   }
 
   Future<void> _load() async {
-    setState(() { isLoading = true; error = null; });
+    setState(() {
+      isLoading = true;
+      error = null;
+    });
     try {
       final r = await dbHelper.getAllParties();
       if (!mounted) return;
       if (r.success) {
         allParties = r.data ?? [];
-        final newBalances = <dynamic, double>{};
-        for (final p in allParties) {
-          final b = await dbHelper.getPartyBalance(p);
-          if (b.success) newBalances[p.key] = b.data ?? 0;
-        }
+        final balanceResult = await dbHelper.getAllPartyBalances();
         if (!mounted) return;
-        setState(() { balances = newBalances; isLoading = false; });
+        setState(() {
+          balances = balanceResult.data ?? {};
+          isLoading = false;
+          error = balanceResult.success ? null : balanceResult.error;
+        });
       } else {
-        setState(() { isLoading = false; error = r.error; });
+        setState(() {
+          isLoading = false;
+          error = r.error;
+        });
       }
     } catch (e) {
-      if (mounted) setState(() { isLoading = false; error = 'Failed: $e'; });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          error = 'Failed: $e';
+        });
+      }
     }
   }
 
@@ -62,21 +73,33 @@ class _PartiesScreenState extends State<PartiesScreen>
         ? allParties
         : allParties.where((p) => p.type == type).toList();
     if (searchQuery.isNotEmpty) {
-      list = list.where((p) =>
-        p.name.toLowerCase().contains(searchQuery.toLowerCase())).toList();
+      list = list
+          .where(
+            (p) => p.name.toLowerCase().contains(searchQuery.toLowerCase()),
+          )
+          .toList();
     }
     return list;
   }
 
   Future<void> _showPartyDialog([Party? party]) async {
-    final nameCtrl  = TextEditingController(text: party?.name);
+    final nameCtrl = TextEditingController(text: party?.name);
     final phoneCtrl = TextEditingController(text: party?.phone);
-    final addrCtrl  = TextEditingController(text: party?.address);
+    final addrCtrl = TextEditingController(text: party?.address);
     final notesCtrl = TextEditingController(text: party?.notes);
-    final adjCtrl   = TextEditingController(
-      text: (party?.adjustmentValue ?? 0) == 0 ? '' : party!.adjustmentValue.toString());
-    String adjType   = party?.adjustmentType ?? '=';
-    PartyType pType  = party?.type ?? PartyType.customer;
+    final adjCtrl = TextEditingController(
+      text: (party?.adjustmentValue ?? 0) == 0
+          ? ''
+          : party!.adjustmentValue.toString(),
+    );
+    // Percentage fields
+    String percType = party?.percentageType ?? 'discount';
+    final percCtrl = TextEditingController(
+      text: (party?.percentageValue ?? 0) == 0 ? '' : party!.percentageValue.toString(),
+    );
+
+    String adjType = party?.adjustmentType ?? '=';
+    PartyType pType = party?.type ?? PartyType.customer;
 
     if (!mounted) return;
     await showModalBottomSheet(
@@ -90,51 +113,89 @@ class _PartiesScreenState extends State<PartiesScreen>
             borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
           ),
           padding: EdgeInsets.fromLTRB(
-            18, 16, 18, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            18,
+            16,
+            18,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Handle
-                Center(child: Container(
-                  width: 32, height: 3,
-                  decoration: BoxDecoration(
-                    color: kBorder, borderRadius: BorderRadius.circular(2)))),
+                Center(
+                  child: Container(
+                    width: 32,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: kBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
-                Text(party == null ? 'Add Party' : 'Edit Party',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kText)),
+                Text(
+                  party == null ? 'Add Party' : 'Edit Party',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: kText,
+                  ),
+                ),
                 const SizedBox(height: 14),
 
                 // Name
-                _Field(controller: nameCtrl, label: 'Name *', hint: 'Party name'),
+                _Field(
+                  controller: nameCtrl,
+                  label: 'Name *',
+                  hint: 'Party name',
+                ),
                 const SizedBox(height: 9),
 
                 // Phone + Address on one line each (compact)
-                Row(children: [
-                  Expanded(child: _Field(controller: phoneCtrl, label: 'Phone',
-                    hint: 'Optional', keyboardType: TextInputType.phone)),
-                  const SizedBox(width: 8),
-                  Expanded(child: _Field(controller: addrCtrl, label: 'Address',
-                    hint: 'Optional')),
-                ]),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _Field(
+                        controller: phoneCtrl,
+                        label: 'Phone',
+                        hint: 'Optional',
+                        keyboardType: TextInputType.phone,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _Field(
+                        controller: addrCtrl,
+                        label: 'Address',
+                        hint: 'Optional',
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 9),
 
                 // Type chips
-                Row(children: [
-                  const Text('Type  ', style: TextStyle(fontSize: 11, color: kTextSub)),
-                  _TypeChip(
-                    label: 'Customer',
-                    selected: pType == PartyType.customer,
-                    onTap: () => setSheet(() => pType = PartyType.customer),
-                  ),
-                  const SizedBox(width: 7),
-                  _TypeChip(
-                    label: 'Supplier',
-                    selected: pType == PartyType.supplier,
-                    onTap: () => setSheet(() => pType = PartyType.supplier),
-                  ),
-                ]),
+                Row(
+                  children: [
+                    const Text(
+                      'Type  ',
+                      style: TextStyle(fontSize: 11, color: kTextSub),
+                    ),
+                    _TypeChip(
+                      label: 'Customer',
+                      selected: pType == PartyType.customer,
+                      onTap: () => setSheet(() => pType = PartyType.customer),
+                    ),
+                    const SizedBox(width: 7),
+                    _TypeChip(
+                      label: 'Supplier',
+                      selected: pType == PartyType.supplier,
+                      onTap: () => setSheet(() => pType = PartyType.supplier),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 9),
 
                 // Rate Adjustment – inline compact row
@@ -143,10 +204,80 @@ class _PartiesScreenState extends State<PartiesScreen>
                   adjCtrl: adjCtrl,
                   onTypeChanged: (v) => setSheet(() => adjType = v),
                 ),
-                const SizedBox(height: 9),
+                const SizedBox(height: 14),
+
+                // ✨ NEW: Percentage Section
+                const Text(
+                  'Percentage Settings (Optional)',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kText),
+                ),
+                const SizedBox(height: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Type',
+                      style: TextStyle(fontSize: 11, color: kTextSub),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        ...['discount', 'markup', 'tax'].map((t) {
+                          final selected = percType == t;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: GestureDetector(
+                              onTap: () => setSheet(() => percType = t),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 120),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: selected ? kBlue : kCard,
+                                  borderRadius: BorderRadius.circular(7),
+                                  border: Border.all(
+                                    color: selected ? kBlue : kBorder,
+                                  ),
+                                ),
+                                child: Text(
+                                  t[0].toUpperCase() + t.substring(1),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: selected ? Colors.white : kTextSub,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _Field(
+                      controller: percCtrl,
+                      label: 'Percentage Value',
+                      hint: 'e.g., 10',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Leave empty or 0 to disable percentage adjustment',
+                      style: const TextStyle(fontSize: 10, color: kTextMuted),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
 
                 // Notes
-                _Field(controller: notesCtrl, label: 'Notes', hint: 'Optional', maxLines: 2),
+                _Field(
+                  controller: notesCtrl,
+                  label: 'Notes',
+                  hint: 'Optional',
+                  maxLines: 2,
+                ),
                 const SizedBox(height: 14),
 
                 SizedBox(
@@ -156,22 +287,36 @@ class _PartiesScreenState extends State<PartiesScreen>
                       final name = nameCtrl.text.trim();
                       if (name.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Enter party name')));
+                          const SnackBar(content: Text('Enter party name')),
+                        );
                         return;
                       }
                       final adjVal = double.tryParse(adjCtrl.text) ?? 0.0;
+                      final percVal = double.tryParse(percCtrl.text) ?? 0.0;
+
+                      // Validate percentage
+                      if (percVal < 0 || percVal > 100) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Percentage must be 0-100')),
+                        );
+                        return;
+                      }
 
                       DatabaseResult<Party> r;
                       if (party == null) {
-                        r = await dbHelper.insertParty(Party.now(
-                          name: name,
-                          phone: _nullIfEmpty(phoneCtrl.text),
-                          address: _nullIfEmpty(addrCtrl.text),
-                          adjustmentType: adjType,
-                          adjustmentValue: adjVal,
-                          notes: _nullIfEmpty(notesCtrl.text),
-                          type: pType,
-                        ));
+                        r = await dbHelper.insertParty(
+                          Party.now(
+                            name: name,
+                            phone: _nullIfEmpty(phoneCtrl.text),
+                            address: _nullIfEmpty(addrCtrl.text),
+                            adjustmentType: adjType,
+                            adjustmentValue: adjVal,
+                            notes: _nullIfEmpty(notesCtrl.text),
+                            type: pType,
+                            percentageType: percVal > 0 ? percType : null,
+                            percentageValue: percVal,
+                          ),
+                        );
                       } else {
                         // Update in-place (preserves Hive key, so linked records stay intact)
                         party.name = name;
@@ -181,17 +326,25 @@ class _PartiesScreenState extends State<PartiesScreen>
                         party.adjustmentValue = adjVal;
                         party.notes = _nullIfEmpty(notesCtrl.text);
                         party.type = pType;
+                        party.percentageType = percVal > 0 ? percType : null;
+                        party.percentageValue = percVal;
                         r = await dbHelper.updateParty(party);
                       }
 
                       if (r.success && mounted) {
                         Navigator.pop(ctx);
                         _load();
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(party == null ? 'Party added' : 'Party updated')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              party == null ? 'Party added' : 'Party updated',
+                            ),
+                          ),
+                        );
                       } else if (!r.success && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(r.error ?? 'Failed')));
+                          SnackBar(content: Text(r.error ?? 'Failed')),
+                        );
                       }
                     },
                     child: Text(party == null ? 'Save Party' : 'Update Party'),
@@ -226,12 +379,21 @@ class _PartiesScreenState extends State<PartiesScreen>
               style: const TextStyle(fontSize: 12),
               decoration: InputDecoration(
                 hintText: 'Search parties...',
-                prefixIcon: const Icon(Icons.search_rounded, size: 16, color: kTextMuted),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 16,
+                  color: kTextMuted,
+                ),
                 suffixIcon: searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 14, color: kTextMuted),
+                        icon: const Icon(
+                          Icons.clear_rounded,
+                          size: 14,
+                          color: kTextMuted,
+                        ),
                         onPressed: () => setState(() {
-                          searchCtrl.clear(); searchQuery = '';
+                          searchCtrl.clear();
+                          searchQuery = '';
                         }),
                       )
                     : null,
@@ -241,32 +403,58 @@ class _PartiesScreenState extends State<PartiesScreen>
           const SizedBox(height: 6),
           TabBar(
             controller: _tabCtrl,
-            labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            labelStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
             unselectedLabelStyle: const TextStyle(fontSize: 12),
             labelColor: kBlue,
             unselectedLabelColor: kTextSub,
             indicatorColor: kBlue,
             indicatorSize: TabBarIndicatorSize.label,
-            tabs: const [Tab(text: 'All'), Tab(text: 'Customers'), Tab(text: 'Suppliers')],
+            tabs: const [
+              Tab(text: 'All'),
+              Tab(text: 'Customers'),
+              Tab(text: 'Suppliers'),
+            ],
           ),
           Container(height: 1, color: kBorder),
           Expanded(
             child: isLoading
                 ? const Center(child: CircularProgressIndicator(color: kBlue))
                 : error != null
-                    ? Center(child: Text(error!,
-                        style: const TextStyle(fontSize: 12, color: kRed)))
-                    : TabBarView(
-                        controller: _tabCtrl,
-                        children: [
-                          _PartyList(parties: _filtered(null), balances: balances,
-                            onTap: _goLedger, onEdit: _showPartyDialog, onDelete: _deleteParty),
-                          _PartyList(parties: _filtered(PartyType.customer), balances: balances,
-                            onTap: _goLedger, onEdit: _showPartyDialog, onDelete: _deleteParty),
-                          _PartyList(parties: _filtered(PartyType.supplier), balances: balances,
-                            onTap: _goLedger, onEdit: _showPartyDialog, onDelete: _deleteParty),
-                        ],
+                ? Center(
+                    child: Text(
+                      error!,
+                      style: const TextStyle(fontSize: 12, color: kRed),
+                    ),
+                  )
+                : TabBarView(
+                    controller: _tabCtrl,
+                    children: [
+                      _PartyList(
+                        parties: _filtered(null),
+                        balances: balances,
+                        onTap: _goLedger,
+                        onEdit: _showPartyDialog,
+                        onDelete: _deleteParty,
                       ),
+                      _PartyList(
+                        parties: _filtered(PartyType.customer),
+                        balances: balances,
+                        onTap: _goLedger,
+                        onEdit: _showPartyDialog,
+                        onDelete: _deleteParty,
+                      ),
+                      _PartyList(
+                        parties: _filtered(PartyType.supplier),
+                        balances: balances,
+                        onTap: _goLedger,
+                        onEdit: _showPartyDialog,
+                        onDelete: _deleteParty,
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -274,8 +462,9 @@ class _PartiesScreenState extends State<PartiesScreen>
   }
 
   void _goLedger(Party p) {
-    Navigator.push(context,
-      MaterialPageRoute(builder: (_) => PartyLedgerScreen(party: p))
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PartyLedgerScreen(party: p)),
     ).then((_) => _load());
   }
 
@@ -284,18 +473,27 @@ class _PartiesScreenState extends State<PartiesScreen>
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Party?', style: TextStyle(fontSize: 14)),
-        content: Text('Remove ${p.name}?', style: const TextStyle(fontSize: 12)),
+        content: Text(
+          'Remove ${p.name}?',
+          style: const TextStyle(fontSize: 12),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel')),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: kRed),
-            child: const Text('Delete')),
+            child: const Text('Delete'),
+          ),
         ],
-      ));
-    if (ok == true) { await dbHelper.deleteParty(p); _load(); }
+      ),
+    );
+    if (ok == true) {
+      await dbHelper.deleteParty(p);
+      _load();
+    }
   }
 }
 
@@ -313,17 +511,18 @@ class _RateAdjRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The 5 modes: =, +, -, +%, -%
     const modes = ['=', '+', '-', '+%', '-%'];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Rate Adjustment', style: TextStyle(fontSize: 11, color: kTextSub)),
+        const Text(
+          'Rate Adjustment',
+          style: TextStyle(fontSize: 11, color: kTextSub),
+        ),
         const SizedBox(height: 6),
         Row(
           children: [
-            // Mode selector chips (compact)
             ...modes.map((m) {
               final selected = adjType == m;
               return Padding(
@@ -332,33 +531,42 @@ class _RateAdjRow extends StatelessWidget {
                   onTap: () => onTypeChanged(m),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 120),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: selected ? kBlue : kCard,
                       borderRadius: BorderRadius.circular(7),
                       border: Border.all(color: selected ? kBlue : kBorder),
                     ),
-                    child: Text(m,
+                    child: Text(
+                      m,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: selected ? Colors.white : kTextSub,
-                      )),
+                      ),
+                    ),
                   ),
                 ),
               );
             }),
-            // Value input (hidden when = selected)
             if (adjType != '=') ...[
               const SizedBox(width: 4),
               Expanded(
                 child: TextField(
                   controller: adjCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   style: const TextStyle(fontSize: 12),
                   decoration: InputDecoration(
                     hintText: adjType.contains('%') ? '% value' : '₹ value',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
                   ),
                 ),
               ),
@@ -368,8 +576,10 @@ class _RateAdjRow extends StatelessWidget {
         if (adjType == '=')
           const Padding(
             padding: EdgeInsets.only(top: 4),
-            child: Text('Same as today\'s base rate',
-              style: TextStyle(fontSize: 10, color: kTextMuted)),
+            child: Text(
+              'Same as today\'s base rate',
+              style: TextStyle(fontSize: 10, color: kTextMuted),
+            ),
           ),
       ],
     );
@@ -385,8 +595,11 @@ class _PartyList extends StatelessWidget {
   final ValueChanged<Party> onDelete;
 
   const _PartyList({
-    required this.parties, required this.balances,
-    required this.onTap, required this.onEdit, required this.onDelete,
+    required this.parties,
+    required this.balances,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -396,12 +609,24 @@ class _PartyList extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(width: 48, height: 48,
-              decoration: BoxDecoration(color: kBlueLight, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.people_rounded, color: kBlue, size: 24)),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: kBlueLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.people_rounded, color: kBlue, size: 24),
+            ),
             const SizedBox(height: 10),
-            const Text('No parties found',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kText)),
+            const Text(
+              'No parties found',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: kText,
+              ),
+            ),
           ],
         ),
       );
@@ -415,7 +640,8 @@ class _PartyList extends StatelessWidget {
         return Container(
           margin: const EdgeInsets.only(bottom: 6),
           decoration: BoxDecoration(
-            color: kCard, borderRadius: BorderRadius.circular(11),
+            color: kCard,
+            borderRadius: BorderRadius.circular(11),
             border: Border.all(color: kBorder),
           ),
           child: InkWell(
@@ -426,14 +652,18 @@ class _PartyList extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 36, height: 36,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: p.type == PartyType.customer ? kBlueLight : kAmberLight,
+                      color: p.type == PartyType.customer
+                          ? kBlueLight
+                          : kAmberLight,
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(
                       p.type == PartyType.customer
-                          ? Icons.person_rounded : Icons.local_shipping_rounded,
+                          ? Icons.person_rounded
+                          : Icons.local_shipping_rounded,
                       color: p.type == PartyType.customer ? kBlue : kAmber,
                       size: 18,
                     ),
@@ -443,24 +673,48 @@ class _PartyList extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(p.name, style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600, color: kText)),
+                        Text(
+                          p.name,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: kText,
+                          ),
+                        ),
                         if (p.phone != null)
-                          Text(p.phone!,
-                            style: const TextStyle(fontSize: 10, color: kTextSub)),
+                          Text(
+                            p.phone!,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: kTextSub,
+                            ),
+                          ),
                         const SizedBox(height: 2),
                         Row(
                           children: [
                             Text(
-                              bal == 0 ? 'Settled' : '₹${bal.abs().toStringAsFixed(0)}',
+                              bal == 0
+                                  ? 'Settled'
+                                  : '₹${bal.abs().toStringAsFixed(0)}',
                               style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w600,
-                                color: bal > 0 ? kGreen : bal < 0 ? kRed : kTextMuted),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: bal > 0
+                                    ? kGreen
+                                    : bal < 0
+                                    ? kRed
+                                    : kTextMuted,
+                              ),
                             ),
                             if (bal != 0) ...[
                               const SizedBox(width: 3),
-                              Text(bal > 0 ? '· to receive' : '· to pay',
-                                style: const TextStyle(fontSize: 10, color: kTextSub)),
+                              Text(
+                                bal > 0 ? '· to receive' : '· to pay',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: kTextSub,
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -471,25 +725,65 @@ class _PartyList extends StatelessWidget {
                   if (p.adjustmentType != '=')
                     Container(
                       margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: kAmberLight,
                         borderRadius: BorderRadius.circular(5),
                       ),
-                      child: Text('${p.adjustmentType}${p.adjustmentValue.toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: kAmberDark)),
+                      child: Text(
+                        '${p.adjustmentType}${p.adjustmentValue.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: kAmberDark,
+                        ),
+                      ),
+                    ),
+                  // NEW: Percentage badge
+                  if (p.hasPercentage)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.cyan[100],
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        '${p.percentageType![0].toUpperCase()} ${p.percentageValue.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.cyan[900],
+                        ),
+                      ),
                     ),
                   InkWell(
                     onTap: () => onEdit(p),
                     child: const Padding(
                       padding: EdgeInsets.all(5),
-                      child: Icon(Icons.edit_rounded, size: 14, color: kTextSub)),
+                      child: Icon(
+                        Icons.edit_rounded,
+                        size: 14,
+                        color: kTextSub,
+                      ),
+                    ),
                   ),
                   InkWell(
                     onTap: () => onDelete(p),
                     child: const Padding(
                       padding: EdgeInsets.all(5),
-                      child: Icon(Icons.delete_outline_rounded, size: 14, color: kRed)),
+                      child: Icon(
+                        Icons.delete_outline_rounded,
+                        size: 14,
+                        color: kRed,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -509,8 +803,11 @@ class _Field extends StatelessWidget {
   final int maxLines;
 
   const _Field({
-    required this.controller, required this.label, required this.hint,
-    this.keyboardType, this.maxLines = 1,
+    required this.controller,
+    required this.label,
+    required this.hint,
+    this.keyboardType,
+    this.maxLines = 1,
   });
 
   @override
@@ -528,7 +825,11 @@ class _TypeChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _TypeChip({required this.label, required this.selected, required this.onTap});
+  const _TypeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -541,10 +842,14 @@ class _TypeChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: selected ? kBlue : kBorder),
       ),
-      child: Text(label, style: TextStyle(
-        fontSize: 11, fontWeight: FontWeight.w600,
-        color: selected ? Colors.white : kTextSub,
-      )),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: selected ? Colors.white : kTextSub,
+        ),
+      ),
     ),
   );
 }

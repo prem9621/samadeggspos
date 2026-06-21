@@ -46,6 +46,9 @@ class DailyRate extends HiveObject {
 /// "=" same as base rate, "+"/"-" flat rupee amount, "+%"/"-%" percentage.
 const List<String> kAdjustmentModes = ['=', '+', '-', '+%', '-%'];
 
+/// Percentage adjustment types
+const List<String> kPercentageTypes = ['discount', 'markup', 'tax'];
+
 @HiveType(typeId: 1)
 class Party extends HiveObject {
   @HiveField(0)
@@ -75,6 +78,13 @@ class Party extends HiveObject {
   @HiveField(8)
   PartyType type; // Customer or Supplier
 
+  // NEW: Percentage fields for Party
+  @HiveField(9)
+  String? percentageType; // 'discount', 'markup', 'tax', or null
+
+  @HiveField(10)
+  double percentageValue; // The % amount (e.g., 10 for 10%)
+
   Party({
     required this.name,
     this.phone,
@@ -85,6 +95,8 @@ class Party extends HiveObject {
     required this.createdAt,
     required this.updatedAt,
     this.type = PartyType.customer,
+    this.percentageType,
+    this.percentageValue = 0.0,
   });
 
   factory Party.now({
@@ -95,6 +107,8 @@ class Party extends HiveObject {
     required double adjustmentValue,
     String? notes,
     PartyType type = PartyType.customer,
+    String? percentageType,
+    double percentageValue = 0.0,
   }) {
     final now = DateTime.now();
     return Party(
@@ -107,6 +121,8 @@ class Party extends HiveObject {
       createdAt: now,
       updatedAt: now,
       type: type,
+      percentageType: percentageType,
+      percentageValue: percentageValue,
     );
   }
 
@@ -130,6 +146,49 @@ class Party extends HiveObject {
     }
   }
 
+  /// Apply percentage adjustment to an amount
+  double applyPercentageToAmount(double amount) {
+    if (percentageType == null || percentageValue == 0) {
+      return amount;
+    }
+
+    switch (percentageType) {
+      case 'discount':
+        final discountValue = (amount * percentageValue) / 100;
+        return amount - discountValue;
+      case 'markup':
+        final markupValue = (amount * percentageValue) / 100;
+        return amount + markupValue;
+      case 'tax':
+        final taxValue = (amount * percentageValue) / 100;
+        return amount + taxValue;
+      default:
+        return amount;
+    }
+  }
+
+  /// Get percentage breakdown for display
+  Map<String, double> getPercentageBreakdown(double amount) {
+    if (percentageType == null || percentageValue == 0) {
+      return {
+        'baseAmount': amount,
+        'percentageValue': 0,
+        'finalAmount': amount,
+        'percentage': 0,
+      };
+    }
+
+    final percentageAmount = (amount * percentageValue) / 100;
+    double finalAmount = applyPercentageToAmount(amount);
+
+    return {
+      'baseAmount': amount,
+      'percentageValue': percentageAmount,
+      'finalAmount': finalAmount,
+      'percentage': percentageValue,
+    };
+  }
+
   /// Short display label for the adjustment, e.g. "+10%", "-₹5", "=".
   /// Centralised here so every screen/widget shows the exact same text
   /// instead of each file re-implementing its own switch statement.
@@ -149,8 +208,20 @@ class Party extends HiveObject {
     }
   }
 
+  /// Get percentage label for display
+  String get percentageLabel {
+    if (percentageType == null || percentageValue == 0) {
+      return 'None';
+    }
+    final typeLabel = percentageType![0].toUpperCase() + percentageType!.substring(1);
+    return '$typeLabel: ${percentageValue.toStringAsFixed(percentageValue % 1 == 0 ? 0 : 1)}%';
+  }
+
   /// True if this party has any adjustment away from the base rate.
   bool get hasAdjustment => adjustmentType != '=' && adjustmentValue != 0;
+
+  /// True if this party has percentage adjustment
+  bool get hasPercentage => percentageType != null && percentageValue != 0;
 }
 
 @HiveType(typeId: 2)

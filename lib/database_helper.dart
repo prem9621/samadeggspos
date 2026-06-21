@@ -7,13 +7,9 @@ class DatabaseResult<T> {
   final String? error;
   final bool success;
 
-  DatabaseResult.success(this.data)
-      : error = null,
-        success = true;
+  DatabaseResult.success(this.data) : error = null, success = true;
 
-  DatabaseResult.failure(this.error)
-      : data = null,
-        success = false;
+  DatabaseResult.failure(this.error) : data = null, success = false;
 }
 
 class DatabaseHelper {
@@ -111,7 +107,8 @@ class DatabaseHelper {
   Future<DatabaseResult<List<DailyRate>>> getAllDailyRates() async {
     try {
       final box = await Hive.openBox<DailyRate>(boxDailyRates);
-      final list = box.values.toList()..sort((a, b) => b.date.compareTo(a.date));
+      final list = box.values.toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
       return DatabaseResult.success(list);
     } catch (e) {
       return DatabaseResult.failure('Failed to load rates: $e');
@@ -130,7 +127,9 @@ class DatabaseHelper {
 
       final box = await Hive.openBox<Party>(boxParties);
       for (final existing in box.values) {
-        if (existing.name.toLowerCase().trim() == party.name.toLowerCase().trim() && existing.key != party.key) {
+        if (existing.name.toLowerCase().trim() ==
+                party.name.toLowerCase().trim() &&
+            existing.key != party.key) {
           return DatabaseResult.failure('Party with this name already exists');
         }
       }
@@ -150,7 +149,9 @@ class DatabaseHelper {
 
       final box = await Hive.openBox<Party>(boxParties);
       for (final existing in box.values) {
-        if (existing.name.toLowerCase().trim() == party.name.toLowerCase().trim() && existing.key != party.key) {
+        if (existing.name.toLowerCase().trim() ==
+                party.name.toLowerCase().trim() &&
+            existing.key != party.key) {
           return DatabaseResult.failure('Party with this name already exists');
         }
       }
@@ -175,7 +176,8 @@ class DatabaseHelper {
   Future<DatabaseResult<List<Party>>> getAllParties() async {
     try {
       final box = await Hive.openBox<Party>(boxParties);
-      final list = box.values.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      final list = box.values.toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       return DatabaseResult.success(list);
     } catch (e) {
       return DatabaseResult.failure('Failed to load parties: $e');
@@ -188,7 +190,9 @@ class DatabaseHelper {
       if (!result.success) {
         return DatabaseResult.failure(result.error);
       }
-      return DatabaseResult.success(result.data?.where((p) => p.type == type).toList() ?? []);
+      return DatabaseResult.success(
+        result.data?.where((p) => p.type == type).toList() ?? [],
+      );
     } catch (e) {
       return DatabaseResult.failure('Failed to load parties: $e');
     }
@@ -196,10 +200,12 @@ class DatabaseHelper {
 
   /// Used directly by the Sale screen instead of fetching all parties
   /// and filtering manually every time it loads.
-  Future<DatabaseResult<List<Party>>> getAllCustomers() => getPartiesByType(PartyType.customer);
+  Future<DatabaseResult<List<Party>>> getAllCustomers() =>
+      getPartiesByType(PartyType.customer);
 
   /// Used directly by the Purchase screen.
-  Future<DatabaseResult<List<Party>>> getAllSuppliers() => getPartiesByType(PartyType.supplier);
+  Future<DatabaseResult<List<Party>>> getAllSuppliers() =>
+      getPartiesByType(PartyType.supplier);
 
   Future<DatabaseResult<List<Party>>> searchParties(String query) async {
     try {
@@ -209,8 +215,11 @@ class DatabaseHelper {
       }
 
       final searchLower = query.toLowerCase().trim();
-      final filtered = result.data?.where((p) =>
-          p.name.toLowerCase().contains(searchLower)).toList() ?? [];
+      final filtered =
+          result.data
+              ?.where((p) => p.name.toLowerCase().contains(searchLower))
+              .toList() ??
+          [];
 
       return DatabaseResult.success(filtered);
     } catch (e) {
@@ -249,7 +258,7 @@ class DatabaseHelper {
 
       List<SaleWithParty> result = [];
       for (final sale in saleBox.values) {
-        final party = partyBox.getAt(sale.partyKey);
+        final party = partyBox.get(sale.partyKey);
         if (party != null) {
           result.add(SaleWithParty(sale: sale, party: party));
         }
@@ -261,52 +270,66 @@ class DatabaseHelper {
     }
   }
 
-  Future<DatabaseResult<List<SaleWithParty>>> getSalesByDate(String date) async {
+  Future<DatabaseResult<List<SaleWithParty>>> getSalesByDate(
+    String date,
+  ) async {
     try {
       final result = await getAllSales();
       if (!result.success) {
         return DatabaseResult.failure(result.error);
       }
-      final filtered = result.data?.where((s) => s.sale.saleDate == date).toList() ?? [];
+      final filtered =
+          result.data?.where((s) => s.sale.saleDate == date).toList() ?? [];
       return DatabaseResult.success(filtered);
     } catch (e) {
       return DatabaseResult.failure('Failed to load sales: $e');
     }
   }
 
-  Future<DatabaseResult<List<PurchaseWithSupplier>>> getPurchasesByDate(String date) async {
+  Future<DatabaseResult<List<PurchaseWithSupplier>>> getPurchasesByDate(
+    String date,
+  ) async {
     try {
       final result = await getAllPurchases();
       if (!result.success) {
         return DatabaseResult.failure(result.error);
       }
-      final filtered = result.data?.where((p) => p.purchase.purchaseDate == date).toList() ?? [];
+      final filtered =
+          result.data?.where((p) => p.purchase.purchaseDate == date).toList() ??
+          [];
       return DatabaseResult.success(filtered);
     } catch (e) {
       return DatabaseResult.failure('Failed to load purchases: $e');
     }
   }
 
-  Future<DatabaseResult<List<PaymentWithParty>>> getPaymentsByDate(String date) async {
+  Future<DatabaseResult<List<PaymentWithParty>>> getPaymentsByDate(
+    String date,
+  ) async {
     try {
       final result = await getAllPayments();
       if (!result.success) {
         return DatabaseResult.failure(result.error);
       }
-      final filtered = result.data?.where((p) => p.payment.date == date).toList() ?? [];
+      final filtered =
+          result.data?.where((p) => p.payment.date == date).toList() ?? [];
       return DatabaseResult.success(filtered);
     } catch (e) {
       return DatabaseResult.failure('Failed to load payments: $e');
     }
   }
 
-  Future<DatabaseResult<List<SaleWithParty>>> getSalesByParty(Party party) async {
+  Future<DatabaseResult<List<SaleWithParty>>> getSalesByParty(
+    Party party,
+  ) async {
     try {
       final result = await getAllSales();
       if (!result.success) {
         return DatabaseResult.failure(result.error);
       }
-      final filtered = result.data?.where((s) => s.sale.partyKey == party.key).toList() ?? [];
+      final filtered =
+          result.data?.where((s) => s.sale.partyKey == party.key).toList() ??
+          [];
       return DatabaseResult.success(filtered);
     } catch (e) {
       return DatabaseResult.failure('Failed to load sales: $e');
@@ -369,7 +392,8 @@ class DatabaseHelper {
   Future<DatabaseResult<List<Expense>>> getAllExpenses() async {
     try {
       final box = await Hive.openBox<Expense>(boxExpenses);
-      final list = box.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final list = box.values.toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return DatabaseResult.success(list);
     } catch (e) {
       return DatabaseResult.failure('Failed to load expenses: $e');
@@ -430,7 +454,7 @@ class DatabaseHelper {
 
       List<PaymentWithParty> result = [];
       for (final payment in paymentBox.values) {
-        final party = partyBox.getAt(payment.partyKey);
+        final party = partyBox.get(payment.partyKey);
         if (party != null) {
           result.add(PaymentWithParty(payment: payment, party: party));
         }
@@ -442,13 +466,17 @@ class DatabaseHelper {
     }
   }
 
-  Future<DatabaseResult<List<PaymentWithParty>>> getPaymentsByParty(Party party) async {
+  Future<DatabaseResult<List<PaymentWithParty>>> getPaymentsByParty(
+    Party party,
+  ) async {
     try {
       final result = await getAllPayments();
       if (!result.success) {
         return DatabaseResult.failure(result.error);
       }
-      final filtered = result.data?.where((p) => p.payment.partyKey == party.key).toList() ?? [];
+      final filtered =
+          result.data?.where((p) => p.payment.partyKey == party.key).toList() ??
+          [];
       return DatabaseResult.success(filtered);
     } catch (e) {
       return DatabaseResult.failure('Failed to load payments: $e');
@@ -486,25 +514,35 @@ class DatabaseHelper {
 
       List<PurchaseWithSupplier> result = [];
       for (final purchase in purchaseBox.values) {
-        final supplier = partyBox.getAt(purchase.supplierKey);
+        final supplier = partyBox.get(purchase.supplierKey);
         if (supplier != null) {
-          result.add(PurchaseWithSupplier(purchase: purchase, supplier: supplier));
+          result.add(
+            PurchaseWithSupplier(purchase: purchase, supplier: supplier),
+          );
         }
       }
-      result.sort((a, b) => b.purchase.createdAt.compareTo(a.purchase.createdAt));
+      result.sort(
+        (a, b) => b.purchase.createdAt.compareTo(a.purchase.createdAt),
+      );
       return DatabaseResult.success(result);
     } catch (e) {
       return DatabaseResult.failure('Failed to load purchases: $e');
     }
   }
 
-  Future<DatabaseResult<List<PurchaseWithSupplier>>> getPurchasesBySupplier(Party supplier) async {
+  Future<DatabaseResult<List<PurchaseWithSupplier>>> getPurchasesBySupplier(
+    Party supplier,
+  ) async {
     try {
       final result = await getAllPurchases();
       if (!result.success) {
         return DatabaseResult.failure(result.error);
       }
-      final filtered = result.data?.where((p) => p.purchase.supplierKey == supplier.key).toList() ?? [];
+      final filtered =
+          result.data
+              ?.where((p) => p.purchase.supplierKey == supplier.key)
+              .toList() ??
+          [];
       return DatabaseResult.success(filtered);
     } catch (e) {
       return DatabaseResult.failure('Failed to load purchases: $e');
@@ -521,8 +559,12 @@ class DatabaseHelper {
       final paymentsResult = await getPaymentsByParty(party);
       final purchasesResult = await getPurchasesBySupplier(party);
 
-      if (!salesResult.success || !paymentsResult.success || !purchasesResult.success) {
-        return DatabaseResult.failure(salesResult.error ?? paymentsResult.error ?? purchasesResult.error);
+      if (!salesResult.success ||
+          !paymentsResult.success ||
+          !purchasesResult.success) {
+        return DatabaseResult.failure(
+          salesResult.error ?? paymentsResult.error ?? purchasesResult.error,
+        );
       }
 
       double totalSales = 0;
@@ -545,7 +587,9 @@ class DatabaseHelper {
         }
       }
 
-      double balance = (totalSales - totalPurchases) - (totalPaymentsReceived - totalPaymentsPaid);
+      double balance =
+          (totalSales - totalPurchases) -
+          (totalPaymentsReceived - totalPaymentsPaid);
 
       return DatabaseResult.success(balance);
     } catch (e) {
@@ -572,10 +616,13 @@ class DatabaseHelper {
         balances[sale.partyKey] = (balances[sale.partyKey] ?? 0) + sale.amount;
       }
       for (final purchase in purchaseBox.values) {
-        balances[purchase.supplierKey] = (balances[purchase.supplierKey] ?? 0) - purchase.amount;
+        balances[purchase.supplierKey] =
+            (balances[purchase.supplierKey] ?? 0) - purchase.amount;
       }
       for (final payment in paymentBox.values) {
-        final delta = payment.paymentType == 'received' ? -payment.amount : payment.amount;
+        final delta = payment.paymentType == 'received'
+            ? -payment.amount
+            : payment.amount;
         balances[payment.partyKey] = (balances[payment.partyKey] ?? 0) + delta;
       }
 
@@ -594,7 +641,9 @@ class DatabaseHelper {
       final salesResult = await getTotalSalesAmountOnDate(date);
       final expensesResult = await getTotalExpensesOnDate(date);
       if (!salesResult.success || !expensesResult.success) {
-        return DatabaseResult.failure(salesResult.error ?? expensesResult.error);
+        return DatabaseResult.failure(
+          salesResult.error ?? expensesResult.error,
+        );
       }
       final profit = (salesResult.data ?? 0) - (expensesResult.data ?? 0);
       return DatabaseResult.success(profit);

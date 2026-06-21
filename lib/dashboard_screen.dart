@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'models.dart';
 import 'database_helper.dart';
 import 'main.dart';
@@ -27,13 +28,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _load() async {
-    setState(() { isLoading = true; error = null; });
+    setState(() {
+      isLoading = true;
+      error = null;
+    });
     try {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final rateR  = await dbHelper.getDailyRateByDate(today);
+      final rateR = await dbHelper.getDailyRateByDate(today);
       final salesR = await dbHelper.getSalesByDate(today);
       final purchR = await dbHelper.getPurchasesByDate(today);
-      final paymR  = await dbHelper.getPaymentsByDate(today);
+      final paymR = await dbHelper.getPaymentsByDate(today);
       if (!mounted) return;
 
       final txns = <dynamic>[];
@@ -72,14 +76,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         isLoading = false;
       });
     } catch (e) {
-      if (mounted) setState(() { isLoading = false; error = 'Failed to load: $e'; });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          error = 'Failed to load: $e';
+        });
+      }
     }
   }
 
   DateTime _txnTime(dynamic t) {
     final type = t['type'] as String;
-    if (type == 'sale')     return (t['data'] as SaleWithParty).sale.createdAt;
-    if (type == 'purchase') return (t['data'] as PurchaseWithSupplier).purchase.createdAt;
+    if (type == 'sale') return (t['data'] as SaleWithParty).sale.createdAt;
+    if (type == 'purchase') {
+      return (t['data'] as PurchaseWithSupplier).purchase.createdAt;
+    }
     return (t['data'] as PaymentWithParty).payment.createdAt;
   }
 
@@ -98,12 +109,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         controller: ctrl,
         isEdit: isEdit,
         onSave: (rate) async {
-          final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-          if (isEdit) {
-            todayRate!.baseRate = rate;
-            await dbHelper.updateDailyRate(todayRate!);
-          } else {
-            await dbHelper.insertDailyRate(DailyRate.now(today, rate));
+          final result = await dbHelper.setTodayRate(rate);
+          if (result.success && mounted) {
+            context.read<AppState>().notifyRatesChanged();
+          } else if (!result.success && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(result.error ?? 'Failed to save rate')),
+            );
           }
           _load();
         },
@@ -121,8 +133,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: isLoading
             ? const Center(child: CircularProgressIndicator(color: kBlue))
             : error != null
-                ? _ErrorState(message: error!, onRetry: _load)
-                : _buildBody(),
+            ? _ErrorState(message: error!, onRetry: _load)
+            : _buildBody(),
       ),
     );
   }
@@ -138,16 +150,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // ── Date + Time
         Row(
           children: [
-            const Icon(Icons.calendar_today_rounded, size: 11, color: kTextMuted),
+            const Icon(
+              Icons.calendar_today_rounded,
+              size: 11,
+              color: kTextMuted,
+            ),
             const SizedBox(width: 5),
-            Text(dateLabel, style: const TextStyle(fontSize: 11, color: kTextSub)),
+            Text(
+              dateLabel,
+              style: const TextStyle(fontSize: 11, color: kTextSub),
+            ),
             const SizedBox(width: 8),
-            Container(width: 3, height: 3,
-              decoration: const BoxDecoration(color: kTextMuted, shape: BoxShape.circle)),
+            Container(
+              width: 3,
+              height: 3,
+              decoration: const BoxDecoration(
+                color: kTextMuted,
+                shape: BoxShape.circle,
+              ),
+            ),
             const SizedBox(width: 8),
             const Icon(Icons.access_time_rounded, size: 11, color: kTextMuted),
             const SizedBox(width: 5),
-            Text(timeLabel, style: const TextStyle(fontSize: 11, color: kTextSub)),
+            Text(
+              timeLabel,
+              style: const TextStyle(fontSize: 11, color: kTextSub),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -165,11 +193,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // ── Transactions header
         Row(
           children: [
-            const Text("Today's History",
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kText)),
+            const Text(
+              "Today's History",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: kText,
+              ),
+            ),
             const Spacer(),
-            Text('${todayTransactions.length} entries',
-              style: const TextStyle(fontSize: 11, color: kTextSub)),
+            Text(
+              '${todayTransactions.length} entries',
+              style: const TextStyle(fontSize: 11, color: kTextSub),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -204,8 +240,12 @@ class _RateLine extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(color: kAmberLight, borderRadius: BorderRadius.circular(8)),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: kAmberLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: const Icon(Icons.egg_rounded, color: kAmber, size: 17),
             ),
             const SizedBox(width: 10),
@@ -213,18 +253,29 @@ class _RateLine extends StatelessWidget {
               child: rate != null
                   ? Row(
                       children: [
-                        Text('Today\'s Rate',
-                          style: const TextStyle(fontSize: 11, color: kTextSub)),
+                        Text(
+                          'Today\'s Rate',
+                          style: const TextStyle(fontSize: 11, color: kTextSub),
+                        ),
                         const SizedBox(width: 8),
-                        Text('₹${rate!.baseRate.toStringAsFixed(2)}',
+                        Text(
+                          '₹${rate!.baseRate.toStringAsFixed(2)}',
                           style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700, color: kAmber)),
-                        Text(' / 100 eggs',
-                          style: const TextStyle(fontSize: 10, color: kTextSub)),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: kAmber,
+                          ),
+                        ),
+                        Text(
+                          ' / 100 eggs',
+                          style: const TextStyle(fontSize: 10, color: kTextSub),
+                        ),
                       ],
                     )
-                  : const Text('Tap to set today\'s rate',
-                      style: TextStyle(fontSize: 12, color: kTextSub)),
+                  : const Text(
+                      'Tap to set today\'s rate',
+                      style: TextStyle(fontSize: 12, color: kTextSub),
+                    ),
             ),
             Icon(
               rate != null ? Icons.edit_rounded : Icons.add_rounded,
@@ -248,15 +299,25 @@ class _SummaryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _SummaryCard(
-          label: 'Sales', value: totalSales, color: kGreen,
-          icon: Icons.trending_up_rounded, bgColor: const Color(0xFFDCFCE7),
-        )),
+        Expanded(
+          child: _SummaryCard(
+            label: 'Sales',
+            value: totalSales,
+            color: kGreen,
+            icon: Icons.trending_up_rounded,
+            bgColor: const Color(0xFFDCFCE7),
+          ),
+        ),
         const SizedBox(width: 8),
-        Expanded(child: _SummaryCard(
-          label: 'Purchases', value: totalPurchases, color: const Color(0xFFF97316),
-          icon: Icons.trending_down_rounded, bgColor: const Color(0xFFFFF7ED),
-        )),
+        Expanded(
+          child: _SummaryCard(
+            label: 'Purchases',
+            value: totalPurchases,
+            color: const Color(0xFFF97316),
+            icon: Icons.trending_down_rounded,
+            bgColor: const Color(0xFFFFF7ED),
+          ),
+        ),
       ],
     );
   }
@@ -268,8 +329,11 @@ class _SummaryCard extends StatelessWidget {
   final Color color, bgColor;
   final IconData icon;
   const _SummaryCard({
-    required this.label, required this.value,
-    required this.color, required this.bgColor, required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.bgColor,
+    required this.icon,
   });
 
   @override
@@ -284,8 +348,12 @@ class _SummaryCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 30, height: 30,
-            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(7)),
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(7),
+            ),
             child: Icon(icon, color: color, size: 15),
           ),
           const SizedBox(width: 9),
@@ -293,9 +361,17 @@ class _SummaryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 10, color: kTextSub)),
-                Text('₹${value.toStringAsFixed(0)}',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color),
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 10, color: kTextSub),
+                ),
+                Text(
+                  '₹${value.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -323,36 +399,37 @@ class _TransactionRow extends StatelessWidget {
 
     if (type == 'sale') {
       final s = data as SaleWithParty;
-      title   = s.party.name;
-      sub     = '${s.sale.eggQuantity.toStringAsFixed(0)} eggs · Sale';
-      amount  = '+₹${s.sale.amount.toStringAsFixed(0)}';
+      title = s.party.name;
+      sub = '${s.sale.eggQuantity.toStringAsFixed(0)} eggs · Sale';
+      amount = '+₹${s.sale.amount.toStringAsFixed(0)}';
       timeStr = DateFormat('h:mm a').format(s.sale.createdAt);
-      icon    = Icons.trending_up_rounded;
+      icon = Icons.trending_up_rounded;
       iconColor = kGreen;
-      iconBg    = const Color(0xFFDCFCE7);
-      amtColor  = kGreen;
+      iconBg = const Color(0xFFDCFCE7);
+      amtColor = kGreen;
     } else if (type == 'purchase') {
       final p = data as PurchaseWithSupplier;
-      title   = p.supplier.name;
-      sub     = '${p.purchase.eggQuantity.toStringAsFixed(0)} eggs · Purchase';
-      amount  = '-₹${p.purchase.amount.toStringAsFixed(0)}';
+      title = p.supplier.name;
+      sub = '${p.purchase.eggQuantity.toStringAsFixed(0)} eggs · Purchase';
+      amount = '-₹${p.purchase.amount.toStringAsFixed(0)}';
       timeStr = DateFormat('h:mm a').format(p.purchase.createdAt);
-      icon    = Icons.trending_down_rounded;
+      icon = Icons.trending_down_rounded;
       iconColor = const Color(0xFFF97316);
-      iconBg    = const Color(0xFFFFF7ED);
-      amtColor  = const Color(0xFFF97316);
+      iconBg = const Color(0xFFFFF7ED);
+      amtColor = const Color(0xFFF97316);
     } else {
       final p = data as PaymentWithParty;
       final isRcv = p.payment.paymentType == 'received';
-      title   = p.party.name;
-      sub     = isRcv ? 'Payment Received' : 'Payment Paid';
-      amount  = isRcv ? '+₹${p.payment.amount.toStringAsFixed(0)}'
-                       : '-₹${p.payment.amount.toStringAsFixed(0)}';
+      title = p.party.name;
+      sub = isRcv ? 'Payment Received' : 'Payment Paid';
+      amount = isRcv
+          ? '+₹${p.payment.amount.toStringAsFixed(0)}'
+          : '-₹${p.payment.amount.toStringAsFixed(0)}';
       timeStr = DateFormat('h:mm a').format(p.payment.createdAt);
-      icon    = Icons.swap_horiz_rounded;
+      icon = Icons.swap_horiz_rounded;
       iconColor = isRcv ? kBlue : kTextSub;
-      iconBg    = isRcv ? kBlueLight : const Color(0xFFF5F5F4);
-      amtColor  = isRcv ? kBlue : kTextSub;
+      iconBg = isRcv ? kBlueLight : const Color(0xFFF5F5F4);
+      amtColor = isRcv ? kBlue : kTextSub;
     }
 
     return Container(
@@ -366,8 +443,12 @@ class _TransactionRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(8)),
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Icon(icon, color: iconColor, size: 16),
           ),
           const SizedBox(width: 10),
@@ -375,24 +456,48 @@ class _TransactionRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: kText)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: kText,
+                  ),
+                ),
                 const SizedBox(height: 1),
                 Row(
                   children: [
-                    Text(sub, style: const TextStyle(fontSize: 10, color: kTextSub)),
+                    Text(
+                      sub,
+                      style: const TextStyle(fontSize: 10, color: kTextSub),
+                    ),
                     const SizedBox(width: 6),
-                    Container(width: 2, height: 2,
-                      decoration: const BoxDecoration(color: kTextMuted, shape: BoxShape.circle)),
+                    Container(
+                      width: 2,
+                      height: 2,
+                      decoration: const BoxDecoration(
+                        color: kTextMuted,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                     const SizedBox(width: 6),
-                    Text(timeStr, style: const TextStyle(fontSize: 10, color: kTextMuted)),
+                    Text(
+                      timeStr,
+                      style: const TextStyle(fontSize: 10, color: kTextMuted),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
-          Text(amount, style: TextStyle(
-            fontSize: 13, fontWeight: FontWeight.w700, color: amtColor)),
+          Text(
+            amount,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: amtColor,
+            ),
+          ),
         ],
       ),
     );
@@ -413,16 +518,32 @@ class _EmptyTransactions extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(color: kAmberLight, borderRadius: BorderRadius.circular(11)),
-            child: const Icon(Icons.receipt_long_rounded, color: kAmber, size: 22),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: kAmberLight,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(
+              Icons.receipt_long_rounded,
+              color: kAmber,
+              size: 22,
+            ),
           ),
           const SizedBox(height: 10),
-          const Text('No transactions yet',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kText)),
+          const Text(
+            'No transactions yet',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: kText,
+            ),
+          ),
           const SizedBox(height: 3),
-          const Text('Sales and purchases will appear here',
-            style: TextStyle(fontSize: 11, color: kTextSub)),
+          const Text(
+            'Sales and purchases will appear here',
+            style: TextStyle(fontSize: 11, color: kTextSub),
+          ),
         ],
       ),
     );
@@ -443,8 +564,11 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(message, style: const TextStyle(fontSize: 12, color: kRed),
-              textAlign: TextAlign.center),
+            Text(
+              message,
+              style: const TextStyle(fontSize: 12, color: kRed),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 14),
             ElevatedButton.icon(
               onPressed: onRetry,
@@ -465,7 +589,10 @@ class _RateBottomSheet extends StatelessWidget {
   final Function(double) onSave;
 
   const _RateBottomSheet({
-    required this.controller, required this.isEdit, required this.onSave});
+    required this.controller,
+    required this.isEdit,
+    required this.onSave,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -475,31 +602,62 @@ class _RateBottomSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       padding: EdgeInsets.fromLTRB(
-        20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+        20,
+        16,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(child: Container(
-            width: 32, height: 3,
-            decoration: BoxDecoration(color: kBorder, borderRadius: BorderRadius.circular(2)))),
+          Center(
+            child: Container(
+              width: 32,
+              height: 3,
+              decoration: BoxDecoration(
+                color: kBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
-          Text(isEdit ? 'Update Today\'s Rate' : 'Set Today\'s Rate',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kText)),
+          Text(
+            isEdit ? 'Update Today\'s Rate' : 'Set Today\'s Rate',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: kText,
+            ),
+          ),
           const SizedBox(height: 2),
-          const Text('Rate per 100 eggs (₹)',
-            style: TextStyle(fontSize: 11, color: kTextSub)),
+          const Text(
+            'Rate per 100 eggs (₹)',
+            style: TextStyle(fontSize: 11, color: kTextSub),
+          ),
           const SizedBox(height: 14),
           TextField(
             controller: controller,
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: kAmber),
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: kAmber,
+            ),
             decoration: const InputDecoration(
               prefixText: '₹ ',
-              prefixStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: kAmber),
+              prefixStyle: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: kAmber,
+              ),
               hintText: '0.00',
-              hintStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: kTextMuted),
+              hintStyle: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: kTextMuted,
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -510,7 +668,8 @@ class _RateBottomSheet extends StatelessWidget {
                 final rate = double.tryParse(controller.text);
                 if (rate == null || rate <= 0) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a valid rate')));
+                    const SnackBar(content: Text('Enter a valid rate')),
+                  );
                   return;
                 }
                 Navigator.pop(context);

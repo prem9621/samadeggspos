@@ -13,27 +13,29 @@ import 'settings_screen.dart';
 import 'purchase_entry_screen.dart';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-const kBlue     = Color(0xFF2563EB);   // Primary – buttons, active
-const kBlueDark = Color(0xFF1D4ED8);   // Pressed
-const kBlueLight= Color(0xFFEFF6FF);   // Blue tint bg
-const kAmber    = Color(0xFFD97706);   // Egg-gold accent
-const kAmberLight=Color(0xFFFEF3C7);
-const kAmberDark= Color(0xFFB45309);
-const kSurface  = Color(0xFFF8F9FA);
-const kCard     = Color(0xFFFFFFFF);
-const kBorder   = Color(0xFFE9ECEF);
-const kText     = Color(0xFF1A1A2E);
-const kTextSub  = Color(0xFF6C757D);
-const kTextMuted= Color(0xFFADB5BD);
-const kGreen    = Color(0xFF16A34A);
-const kRed      = Color(0xFFDC2626);
+const kBlue = Color(0xFF2563EB); // Primary – buttons, active
+const kBlueDark = Color(0xFF1D4ED8); // Pressed
+const kBlueLight = Color(0xFFEFF6FF); // Blue tint bg
+const kAmber = Color(0xFFD97706); // Egg-gold accent
+const kAmberLight = Color(0xFFFEF3C7);
+const kAmberDark = Color(0xFFB45309);
+const kSurface = Color(0xFFF8F9FA);
+const kCard = Color(0xFFFFFFFF);
+const kBorder = Color(0xFFE9ECEF);
+const kText = Color(0xFF1A1A2E);
+const kTextSub = Color(0xFF6C757D);
+const kTextMuted = Color(0xFFADB5BD);
+const kGreen = Color(0xFF16A34A);
+const kRed = Color(0xFFDC2626);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
   await DatabaseHelper.init();
   final appState = AppState();
   await appState.loadSettings();
@@ -44,10 +46,12 @@ class AppState extends ChangeNotifier {
   String? _shopName;
   bool _darkMode = false;
   int _selectedIndex = 0;
+  int _rateRevision = 0;
 
   String? get shopName => _shopName;
   bool get darkMode => _darkMode;
   int get selectedIndex => _selectedIndex;
+  int get rateRevision => _rateRevision;
 
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -75,6 +79,11 @@ class AppState extends ChangeNotifier {
     _selectedIndex = index;
     notifyListeners();
   }
+
+  void notifyRatesChanged() {
+    _rateRevision++;
+    notifyListeners();
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -97,16 +106,56 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: kSurface,
         fontFamily: 'Roboto',
         textTheme: const TextTheme(
-          displayLarge:  TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: kText),
-          headlineMedium:TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kText),
-          headlineSmall: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kText),
-          titleLarge:    TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: kText),
-          titleMedium:   TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: kText),
-          bodyLarge:     TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: kText),
-          bodyMedium:    TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: kTextSub),
-          bodySmall:     TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: kTextMuted),
-          labelLarge:    TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
-          labelSmall:    TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: kTextMuted),
+          displayLarge: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: kText,
+          ),
+          headlineMedium: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: kText,
+          ),
+          headlineSmall: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: kText,
+          ),
+          titleLarge: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: kText,
+          ),
+          titleMedium: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: kText,
+          ),
+          bodyLarge: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            color: kText,
+          ),
+          bodyMedium: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+            color: kTextSub,
+          ),
+          bodySmall: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w400,
+            color: kTextMuted,
+          ),
+          labelLarge: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+          labelSmall: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+            color: kTextMuted,
+          ),
         ),
         cardTheme: CardThemeData(
           color: kCard,
@@ -123,14 +172,22 @@ class MyApp extends StatelessWidget {
             foregroundColor: Colors.white,
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-            textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(9),
+            ),
+            textStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: kCard,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 13,
+            vertical: 11,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(9),
             borderSide: const BorderSide(color: kBorder),
@@ -166,20 +223,45 @@ class _NavItem {
 }
 
 const _navItems = [
-  _NavItem(Icons.home_outlined,                    Icons.home_rounded,                   'Home',     0),
-  _NavItem(Icons.egg_outlined,                     Icons.egg_rounded,                    'Rate',     1),
-  _NavItem(Icons.people_outline,                   Icons.people_rounded,                 'Parties',  2),
-  _NavItem(Icons.point_of_sale_outlined,           Icons.point_of_sale_rounded,          'Sale',     3),
-  _NavItem(Icons.shopping_bag_outlined,            Icons.shopping_bag_rounded,           'Purchase', 4),
-  _NavItem(Icons.receipt_long_outlined,            Icons.receipt_long_rounded,           'History',  5),
-  _NavItem(Icons.account_balance_wallet_outlined,  Icons.account_balance_wallet_rounded, 'Expenses', 6),
-  _NavItem(Icons.settings_outlined,                Icons.settings_rounded,               'Settings', 7),
+  _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home', 0),
+  _NavItem(Icons.egg_outlined, Icons.egg_rounded, 'Rate', 1),
+  _NavItem(Icons.people_outline, Icons.people_rounded, 'Parties', 2),
+  _NavItem(
+    Icons.point_of_sale_outlined,
+    Icons.point_of_sale_rounded,
+    'Sale',
+    3,
+  ),
+  _NavItem(
+    Icons.shopping_bag_outlined,
+    Icons.shopping_bag_rounded,
+    'Purchase',
+    4,
+  ),
+  _NavItem(
+    Icons.receipt_long_outlined,
+    Icons.receipt_long_rounded,
+    'History',
+    5,
+  ),
+  _NavItem(
+    Icons.account_balance_wallet_outlined,
+    Icons.account_balance_wallet_rounded,
+    'Expenses',
+    6,
+  ),
+  _NavItem(Icons.settings_outlined, Icons.settings_rounded, 'Settings', 7),
 ];
 
 const _screenTitles = [
-  'Today\'s Overview', 'Egg Rate', 'Parties',
-  'New Sale', 'New Purchase', 'Sales History',
-  'Expenses', 'Settings',
+  'Today\'s Overview',
+  'Egg Rate',
+  'Parties',
+  'New Sale',
+  'New Purchase',
+  'Sales History',
+  'Expenses',
+  'Settings',
 ];
 
 class MainScreen extends StatefulWidget {
@@ -236,8 +318,12 @@ class _MainScreenState extends State<MainScreen> {
       title: Row(
         children: [
           Container(
-            width: 28, height: 28,
-            decoration: BoxDecoration(color: kAmberLight, borderRadius: BorderRadius.circular(7)),
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: kAmberLight,
+              borderRadius: BorderRadius.circular(7),
+            ),
             child: const Icon(Icons.egg_rounded, color: kAmber, size: 16),
           ),
           const SizedBox(width: 9),
@@ -246,11 +332,19 @@ class _MainScreenState extends State<MainScreen> {
             children: [
               Text(
                 context.watch<AppState>().shopName ?? 'Samad Eggs',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kText),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: kText,
+                ),
               ),
               Text(
                 _screenTitles[idx],
-                style: const TextStyle(fontSize: 10, color: kTextSub, fontWeight: FontWeight.w400),
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: kTextSub,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ],
           ),
@@ -271,9 +365,17 @@ class _MainScreenState extends State<MainScreen> {
               child: Row(
                 children: [
                   Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(color: kBlue, borderRadius: BorderRadius.circular(11)),
-                    child: const Icon(Icons.egg_rounded, color: Colors.white, size: 22),
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: kBlue,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(
+                      Icons.egg_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -282,10 +384,16 @@ class _MainScreenState extends State<MainScreen> {
                       children: [
                         Text(
                           context.watch<AppState>().shopName ?? 'Samad Eggs',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kText),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: kText,
+                          ),
                         ),
-                        const Text('POS System v1.0',
-                          style: TextStyle(fontSize: 10, color: kTextSub)),
+                        const Text(
+                          'POS System v1.0',
+                          style: TextStyle(fontSize: 10, color: kTextSub),
+                        ),
                       ],
                     ),
                   ),
@@ -297,7 +405,9 @@ class _MainScreenState extends State<MainScreen> {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                children: _navItems.map((item) => _buildNavTile(item, idx)).toList(),
+                children: _navItems
+                    .map((item) => _buildNavTile(item, idx))
+                    .toList(),
               ),
             ),
           ],
@@ -340,8 +450,12 @@ class _MainScreenState extends State<MainScreen> {
                 if (isSelected) ...[
                   const Spacer(),
                   Container(
-                    width: 5, height: 5,
-                    decoration: const BoxDecoration(color: kBlue, shape: BoxShape.circle),
+                    width: 5,
+                    height: 5,
+                    decoration: const BoxDecoration(
+                      color: kBlue,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ],
               ],

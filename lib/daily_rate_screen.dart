@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'models.dart';
 import 'database_helper.dart';
 import 'main.dart';
@@ -24,7 +25,10 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
   }
 
   Future<void> _load() async {
-    setState(() { isLoading = true; error = null; });
+    setState(() {
+      isLoading = true;
+      error = null;
+    });
     try {
       final result = await dbHelper.getAllDailyRates();
       if (!mounted) return;
@@ -37,7 +41,12 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
         }
       });
     } catch (e) {
-      if (mounted) setState(() { isLoading = false; error = 'Failed to load: $e'; });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          error = 'Failed to load: $e';
+        });
+      }
     }
   }
 
@@ -58,24 +67,17 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
         controller: ctrl,
         isEdit: isEdit,
         onSave: (rate) async {
-          if (isEdit) {
-            existing.data!.baseRate = rate;
-            final r = await dbHelper.updateDailyRate(existing.data!);
-            if (r.success && mounted) {
-              _load();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Rate updated')));
-            }
-          } else {
-            final r = await dbHelper.insertDailyRate(DailyRate.now(today, rate));
-            if (r.success && mounted) {
-              _load();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Rate saved')));
-            } else if (!r.success && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(r.error ?? 'Failed')));
-            }
+          final r = await dbHelper.setTodayRate(rate);
+          if (r.success && mounted) {
+            context.read<AppState>().notifyRatesChanged();
+            _load();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(isEdit ? 'Rate updated' : 'Rate saved')),
+            );
+          } else if (!r.success && mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(r.error ?? 'Failed')));
           }
         },
       ),
@@ -98,10 +100,10 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
         child: isLoading
             ? const Center(child: CircularProgressIndicator(color: kAmber))
             : error != null
-                ? _ErrorState(message: error!, onRetry: _load)
-                : rateHistory.isEmpty
-                    ? _EmptyState(onAdd: _showRateDialog)
-                    : _buildList(),
+            ? _ErrorState(message: error!, onRetry: _load)
+            : rateHistory.isEmpty
+            ? _EmptyState(onAdd: _showRateDialog)
+            : _buildList(),
       ),
     );
   }
@@ -129,10 +131,12 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      DateFormat('EEE, d MMM yyyy')
-                          .format(DateTime.parse(rate.date)),
+                      DateFormat(
+                        'EEE, d MMM yyyy',
+                      ).format(DateTime.parse(rate.date)),
                       style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: isToday ? Colors.white : kText,
                       ),
                     ),
@@ -140,7 +144,8 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
                     Text(
                       '₹${rate.baseRate.toStringAsFixed(2)} per 100 eggs',
                       style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                         color: isToday ? Colors.white : kAmber,
                       ),
                     ),
@@ -149,14 +154,22 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
               ),
               if (isToday)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text('Today',
-                    style: TextStyle(fontSize: 11, color: Colors.white,
-                      fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Today',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -179,18 +192,29 @@ class _EmptyState extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(color: kAmberLight,
-                borderRadius: BorderRadius.circular(18)),
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: kAmberLight,
+                borderRadius: BorderRadius.circular(18),
+              ),
               child: const Icon(Icons.egg_rounded, color: kAmber, size: 32),
             ),
             const SizedBox(height: 16),
-            const Text('No rates set yet',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kText)),
+            const Text(
+              'No rates set yet',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: kText,
+              ),
+            ),
             const SizedBox(height: 6),
-            const Text('Set today\'s egg rate to get started',
+            const Text(
+              'Set today\'s egg rate to get started',
               style: TextStyle(fontSize: 13, color: kTextSub),
-              textAlign: TextAlign.center),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: onAdd,
@@ -217,8 +241,11 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(message, style: const TextStyle(fontSize: 13, color: kRed),
-              textAlign: TextAlign.center),
+            Text(
+              message,
+              style: const TextStyle(fontSize: 13, color: kRed),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: onRetry,
@@ -238,7 +265,10 @@ class _RateBottomSheet extends StatelessWidget {
   final Function(double) onSave;
 
   const _RateBottomSheet({
-    required this.controller, required this.isEdit, required this.onSave});
+    required this.controller,
+    required this.isEdit,
+    required this.onSave,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -248,33 +278,52 @@ class _RateBottomSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.fromLTRB(
-          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+        20,
+        20,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
-            child: Container(width: 36, height: 4,
-              decoration: BoxDecoration(color: kBorder,
-                borderRadius: BorderRadius.circular(2))),
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: kBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
           const SizedBox(height: 20),
-          Text(isEdit ? 'Update Rate' : 'Set Today\'s Rate',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(
+            isEdit ? 'Update Rate' : 'Set Today\'s Rate',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 4),
-          const Text('Rate per 100 eggs in ₹',
-            style: TextStyle(fontSize: 12, color: kTextSub)),
+          const Text(
+            'Rate per 100 eggs in ₹',
+            style: TextStyle(fontSize: 12, color: kTextSub),
+          ),
           const SizedBox(height: 16),
           TextField(
             controller: controller,
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(
-              fontSize: 24, fontWeight: FontWeight.w700, color: kAmber),
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: kAmber,
+            ),
             decoration: const InputDecoration(
               prefixText: '₹ ',
               prefixStyle: TextStyle(
-                fontSize: 24, fontWeight: FontWeight.w700, color: kAmber),
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: kAmber,
+              ),
               hintText: '0.00',
             ),
           ),
@@ -286,7 +335,8 @@ class _RateBottomSheet extends StatelessWidget {
                 final rate = double.tryParse(controller.text);
                 if (rate == null || rate <= 0) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a valid rate')));
+                    const SnackBar(content: Text('Enter a valid rate')),
+                  );
                   return;
                 }
                 Navigator.pop(context);
