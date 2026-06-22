@@ -1,4 +1,4 @@
-name: Deploy Flutter Web to GitHub Pages and Vercel
+name: Deploy Flutter Web to GitHub Pages
 on:
   push:
     branches: [ main ]
@@ -36,16 +36,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: build/web
-      
-      - name: Build Flutter Web for Vercel
-        run: |
-          rm -rf build/web
-          flutter build web --release --base-href "/"
-      
-      - name: Commit build/web to git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f build/web
-          git commit -m "Build web for Vercel deployment" || echo "No changes to commit"
-          git push
