@@ -149,7 +149,8 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       _snack('Invalid rate for this supplier');
       return;
     }
-    final purchaseAmount = (purchaseRate * qty) / 100;
+    final basePurchaseAmount = (purchaseRate * qty) / 100;
+    final purchaseAmount = selectedSupplier!.applyPercentageToAmount(basePurchaseAmount);
 
     setState(() => isSaving = true);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());

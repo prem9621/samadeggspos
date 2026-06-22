@@ -22,6 +22,11 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   final _notesController = TextEditingController();
   double adjustedRate = 0.0;
   double totalAmount = 0.0;
+  
+  // Percentage fields
+  double percentageValue = 0.0;
+  double amountBeforePercentage = 0.0;
+  
   bool isLoading = true;
   bool isSaving = false;
   String? error;
@@ -86,12 +91,25 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       setState(() {
         adjustedRate = 0;
         totalAmount = 0;
+        amountBeforePercentage = 0;
+        percentageValue = 0;
       });
       return;
     }
     final qty = double.tryParse(_quantityController.text) ?? 0.0;
     adjustedRate = selectedParty!.calculateAdjustedRate(todayRate!.baseRate);
-    totalAmount = (adjustedRate * qty) / 100;
+    amountBeforePercentage = (adjustedRate * qty) / 100;
+    
+    // Apply percentage if party has one set
+    if (selectedParty!.hasPercentage) {
+      final breakdown = selectedParty!.getPercentageBreakdown(amountBeforePercentage);
+      totalAmount = breakdown['finalAmount'] ?? amountBeforePercentage;
+      percentageValue = breakdown['percentageValue'] ?? 0;
+    } else {
+      totalAmount = amountBeforePercentage;
+      percentageValue = 0;
+    }
+    
     setState(() {});
   }
 
@@ -114,7 +132,8 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     setState(() => isSaving = true);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final saleRate = selectedParty!.calculateAdjustedRate(latestRate.baseRate);
-    final saleAmount = (saleRate * qty) / 100;
+    final baseSaleAmount = (saleRate * qty) / 100;
+    final saleAmount = selectedParty!.applyPercentageToAmount(baseSaleAmount);
     final result = await dbHelper.insertSale(
       Sale.now(
         partyKey: selectedParty!.key as int,
@@ -137,6 +156,8 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
         selectedParty = null;
         adjustedRate = 0;
         totalAmount = 0;
+        amountBeforePercentage = 0;
+        percentageValue = 0;
       });
       _snack('Sale saved successfully!');
     } else {
@@ -345,14 +366,19 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         decoration: const InputDecoration(hintText: 'Any remarks...'),
                       ),
                       if (selectedParty != null && todayRate != null) ...[
-                        const SizedBox(height: 16),
-                        _AmountSummary(
-                          baseRate: todayRate!.baseRate,
-                          adjustedRate: adjustedRate,
-                          adjustmentLabel: selectedParty!.adjustmentLabel,
-                          total: totalAmount,
-                        ),
-                      ],
+                    const SizedBox(height: 16),
+                    _AmountSummary(
+                      baseRate: todayRate!.baseRate,
+                      adjustedRate: adjustedRate,
+                      adjustmentLabel: selectedParty!.adjustmentLabel,
+                      hasAdjustment: selectedParty!.hasAdjustment,
+                      amountBeforePercentage: amountBeforePercentage,
+                      percentageValue: percentageValue,
+                      percentageLabel: selectedParty!.percentageLabel,
+                      hasPercentage: selectedParty!.hasPercentage,
+                      total: totalAmount,
+                    ),
+                  ],
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
@@ -450,15 +476,20 @@ class _RateBanner extends StatelessWidget {
 }
 
 class _AmountSummary extends StatelessWidget {
-  final double baseRate;
-  final double adjustedRate;
-  final double total;
-  final String adjustmentLabel;
-
+  final double baseRate, adjustedRate, total;
+  final double amountBeforePercentage, percentageValue;
+  final String adjustmentLabel, percentageLabel;
+  final bool hasAdjustment, hasPercentage;
+  
   const _AmountSummary({
     required this.baseRate,
     required this.adjustedRate,
     required this.adjustmentLabel,
+    required this.hasAdjustment,
+    required this.amountBeforePercentage,
+    required this.percentageValue,
+    required this.percentageLabel,
+    required this.hasPercentage,
     required this.total,
   });
 
@@ -475,6 +506,25 @@ class _AmountSummary extends StatelessWidget {
             _Row('Base Rate', '₹${baseRate.toStringAsFixed(2)} per 100 eggs'),
             _Row('Party Adjustment', adjustmentLabel),
             _Row('Sale Rate', '₹${adjustedRate.toStringAsFixed(2)} per 100 eggs'),
+            
+            // Percentage breakdown
+            if (hasPercentage) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.cyan[50],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  children: [
+                    _Row('Amount Before %', '₹${amountBeforePercentage.toStringAsFixed(2)}'),
+                    _Row('Percentage ($percentageLabel)', '₹${percentageValue.toStringAsFixed(2)}'),
+                  ],
+                ),
+              ),
+            ],
+            
             const Divider(height: 14, color: kBorder),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
