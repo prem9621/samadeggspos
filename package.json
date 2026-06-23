@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Samad Eggs POS",
   "scripts": {
-    "vercel-build": "bash -c \"git clone -b stable --depth 1 https://github.com/flutter/flutter.git flutter_tmp && export PATH=\\\"\\$PWD/flutter_tmp/bin:\\$PATH\\\" && flutter pub get && flutter build web --release --base-href '/'\""
+    "vercel-build": "bash vercel-build.sh"
   },
   "keywords": ["flutter", "pos"],
   "author": "",

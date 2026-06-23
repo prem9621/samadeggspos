@@ -20,18 +20,26 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   DailyRate? todayRate;
   final _qtyCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  final _adjValueController = TextEditingController();
+  final _percValueController = TextEditingController();
 
-  // No manual rate textbox. The rate paid to the supplier is always
-  // today's base rate run through that supplier's saved adjustment
-  // (set once on the Parties screen), exactly the same mechanism the
-  // Sale screen uses for customers.
+  // No manual rate textbox. The rate paid to the supplier is today's
+  // base rate run through an adjustment — normally the supplier's saved
+  // default, but editable right here for this one purchase only.
   double adjustedRate = 0.0;
   double totalAmount = 0.0;
-  
-  // NEW: Percentage fields
+
   double percentageValue = 0.0;
   double amountBeforePercentage = 0.0;
-  
+
+  // Per-purchase rate override. Starts as the selected supplier's saved
+  // adjustment/percentage but is fully editable on screen — does not
+  // write back to the Party object or change the supplier's saved default.
+  String _adjType = '=';
+  double _adjValue = 0.0;
+  String? _percType;
+  double _percValue = 0.0;
+
   bool isLoading = true;
   bool isSaving = false;
   String? error;
@@ -42,12 +50,16 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     super.initState();
     _loadData();
     _qtyCtrl.addListener(_calc);
+    _adjValueController.addListener(_onAdjValueChanged);
+    _percValueController.addListener(_onPercValueChanged);
   }
 
   @override
   void dispose() {
     _qtyCtrl.dispose();
     _notesCtrl.dispose();
+    _adjValueController.dispose();
+    _percValueController.dispose();
     super.dispose();
   }
 
@@ -63,6 +75,16 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       _lastRateRevision = revision;
       _loadData();
     }
+  }
+
+  void _onAdjValueChanged() {
+    _adjValue = double.tryParse(_adjValueController.text) ?? 0.0;
+    _calc();
+  }
+
+  void _onPercValueChanged() {
+    _percValue = double.tryParse(_percValueController.text) ?? 0.0;
+    _calc();
   }
 
   Future<void> _loadData() async {
@@ -94,9 +116,88 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     }
   }
 
-  /// Recalculates the supplier's adjusted rate from today's base rate
-  /// and updates the total. Runs whenever the supplier changes, today's
-  /// rate loads, or the quantity changes.
+  /// Loads this supplier's saved adjustment + percentage into the
+  /// on-screen override fields. Called whenever the supplier is
+  /// selected/changed, so fields start at the normal default.
+  void _applySupplierDefaults(Party? p) {
+    _adjType = p?.adjustmentType ?? '=';
+    _adjValue = p?.adjustmentValue ?? 0.0;
+    _adjValueController.text = _adjValue == 0 ? '' : _adjValue.toString();
+    _percType = p?.percentageType;
+    _percValue = p?.percentageValue ?? 0.0;
+    _percValueController.text = _percValue == 0 ? '' : _percValue.toString();
+  }
+
+  void _resetToSupplierDefault() {
+    if (selectedSupplier == null) return;
+    setState(() => _applySupplierDefaults(selectedSupplier));
+    _calc();
+  }
+
+  double _adjustedRateFor(double baseRate) {
+    switch (_adjType) {
+      case '+':
+        return baseRate + _adjValue;
+      case '-':
+        final r = baseRate - _adjValue;
+        return r < 0 ? 0 : r;
+      case '+%':
+        return baseRate * (1 + _adjValue / 100);
+      case '-%':
+        final r = baseRate * (1 - _adjValue / 100);
+        return r < 0 ? 0 : r;
+      case '=':
+      default:
+        return baseRate;
+    }
+  }
+
+  double _percentageAmountFor(double amount) {
+    if (_percType == null || _percValue == 0) return 0;
+    return (amount * _percValue) / 100;
+  }
+
+  double _applyPercentageFor(double amount) {
+    if (_percType == null || _percValue == 0) return amount;
+    final pv = (amount * _percValue) / 100;
+    switch (_percType) {
+      case 'discount':
+        return amount - pv;
+      case 'markup':
+        return amount + pv;
+      case 'tax':
+        return amount + pv;
+      default:
+        return amount;
+    }
+  }
+
+  String get _adjLabel {
+    switch (_adjType) {
+      case '+':
+        return '+₹${_adjValue.toStringAsFixed(_adjValue % 1 == 0 ? 0 : 2)}';
+      case '-':
+        return '-₹${_adjValue.toStringAsFixed(_adjValue % 1 == 0 ? 0 : 2)}';
+      case '+%':
+        return '+${_adjValue.toStringAsFixed(_adjValue % 1 == 0 ? 0 : 1)}%';
+      case '-%':
+        return '-${_adjValue.toStringAsFixed(_adjValue % 1 == 0 ? 0 : 1)}%';
+      case '=':
+      default:
+        return '=';
+    }
+  }
+
+  String get _percLabel {
+    if (_percType == null || _percValue == 0) return 'None';
+    final t = _percType![0].toUpperCase() + _percType!.substring(1);
+    return '$t: ${_percValue.toStringAsFixed(_percValue % 1 == 0 ? 0 : 1)}%';
+  }
+
+  /// Recalculates the supplier's effective rate from today's base rate
+  /// (run through the on-screen override) and updates the total. Runs
+  /// whenever the supplier changes, today's rate loads, the quantity
+  /// changes, or the override fields change.
   void _calc() {
     final qty = double.tryParse(_qtyCtrl.text) ?? 0.0;
     if (selectedSupplier == null || todayRate == null) {
@@ -108,22 +209,18 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       });
       return;
     }
-    // calculateAdjustedRate applies adjustmentType (+, -, +%, -%, =)
-    // against today's base rate — defined once in models.dart.
-    adjustedRate = selectedSupplier!.calculateAdjustedRate(todayRate!.baseRate);
+    adjustedRate = _adjustedRateFor(todayRate!.baseRate);
     // baseRate is per 100 eggs, so: amount = adjustedRate * qty / 100
     amountBeforePercentage = (adjustedRate * qty) / 100;
-    
-    // NEW: Apply percentage if supplier has one set
-    if (selectedSupplier!.hasPercentage) {
-      final breakdown = selectedSupplier!.getPercentageBreakdown(amountBeforePercentage);
-      totalAmount = breakdown['finalAmount'] ?? amountBeforePercentage;
-      percentageValue = breakdown['percentageValue'] ?? 0;
+
+    if (_percType != null && _percValue != 0) {
+      percentageValue = _percentageAmountFor(amountBeforePercentage);
+      totalAmount = _applyPercentageFor(amountBeforePercentage);
     } else {
       totalAmount = amountBeforePercentage;
       percentageValue = 0;
     }
-    
+
     setState(() {});
   }
 
@@ -142,15 +239,13 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       _snack('Enter valid quantity');
       return;
     }
-    final purchaseRate = selectedSupplier!.calculateAdjustedRate(
-      latestRate.baseRate,
-    );
+    final purchaseRate = _adjustedRateFor(latestRate.baseRate);
     if (purchaseRate <= 0) {
       _snack('Invalid rate for this supplier');
       return;
     }
     final basePurchaseAmount = (purchaseRate * qty) / 100;
-    final purchaseAmount = selectedSupplier!.applyPercentageToAmount(basePurchaseAmount);
+    final purchaseAmount = _applyPercentageFor(basePurchaseAmount);
 
     setState(() => isSaving = true);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -176,6 +271,12 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
         totalAmount = 0;
         amountBeforePercentage = 0;
         percentageValue = 0;
+        _adjType = '=';
+        _adjValue = 0;
+        _adjValueController.clear();
+        _percType = null;
+        _percValue = 0;
+        _percValueController.clear();
       });
       _snack('Purchase saved!');
     } else {
@@ -298,6 +399,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                             (p) => p.name == name,
                             orElse: () => suppliers.last,
                           );
+                          _applySupplierDefaults(selectedSupplier);
                         });
                         _calc();
                         _snack('Supplier added!');
@@ -342,7 +444,10 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                     label: 'Select Supplier',
                     parties: suppliers,
                     onChanged: (p) {
-                      setState(() => selectedSupplier = p);
+                      setState(() {
+                        selectedSupplier = p;
+                        _applySupplierDefaults(p);
+                      });
                       _calc();
                     },
                     onAddNew: _addSupplierInline,
@@ -362,6 +467,56 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                       suffixText: 'eggs',
                     ),
                   ),
+
+                  if (selectedSupplier != null) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const _SectionLabel('Rate Adjustment (this purchase)'),
+                        InkWell(
+                          onTap: _resetToSupplierDefault,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                Icon(Icons.refresh_rounded, size: 12, color: kBlue),
+                                SizedBox(width: 3),
+                                Text(
+                                  'Reset to default',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: kBlue,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    _AdjustmentEditor(
+                      adjType: _adjType,
+                      controller: _adjValueController,
+                      onTypeChanged: (v) {
+                        setState(() => _adjType = v);
+                        _calc();
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    const _SectionLabel('Percentage (this purchase)'),
+                    const SizedBox(height: 6),
+                    _PercentageEditor(
+                      percType: _percType,
+                      controller: _percValueController,
+                      onTypeChanged: (v) {
+                        setState(() => _percType = v == 'none' ? null : v);
+                        _calc();
+                      },
+                    ),
+                  ],
 
                   const SizedBox(height: 14),
                   const _SectionLabel('Notes (Optional)'),
@@ -383,12 +538,12 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                     _AmountSummary(
                       baseRate: todayRate!.baseRate,
                       adjustedRate: adjustedRate,
-                      adjustmentLabel: selectedSupplier!.adjustmentLabel,
-                      hasAdjustment: selectedSupplier!.hasAdjustment,
+                      adjustmentLabel: _adjLabel,
+                      hasAdjustment: _adjType != '=' && _adjValue != 0,
                       amountBeforePercentage: amountBeforePercentage,
                       percentageValue: percentageValue,
-                      percentageLabel: selectedSupplier!.percentageLabel,
-                      hasPercentage: selectedSupplier!.hasPercentage,
+                      percentageLabel: _percLabel,
+                      hasPercentage: _percType != null && _percValue != 0,
                       total: totalAmount,
                     ),
                   ],
@@ -489,17 +644,158 @@ class _RateBanner extends StatelessWidget {
   );
 }
 
-/// Shows the base rate, the supplier's adjustment, and the resulting
-/// rate paid — then the total. Shown as soon as a supplier is selected
-/// so the user always sees the effective rate before entering qty.
-/// 
-/// NEW: Also shows percentage adjustments if the supplier has them set
+/// Chip row for choosing the adjustment mode (=, +, -, +%, -%) plus an
+/// inline value field. Editable per-transaction — does not write back
+/// to the Party object or change the supplier's saved default.
+class _AdjustmentEditor extends StatelessWidget {
+  final String adjType;
+  final TextEditingController controller;
+  final ValueChanged<String> onTypeChanged;
+
+  const _AdjustmentEditor({
+    required this.adjType,
+    required this.controller,
+    required this.onTypeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const modes = ['=', '+', '-', '+%', '-%'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            ...modes.map((m) {
+              final selected = adjType == m;
+              return Padding(
+                padding: const EdgeInsets.only(right: 5),
+                child: GestureDetector(
+                  onTap: () => onTypeChanged(m),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selected ? kBlue : kCard,
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(color: selected ? kBlue : kBorder),
+                    ),
+                    child: Text(
+                      m,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? Colors.white : kTextSub,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+            if (adjType != '=') ...[
+              const SizedBox(width: 4),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: adjType.contains('%') ? '% value' : '₹ value',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        if (adjType == '=')
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              'Same as today\'s base rate',
+              style: TextStyle(fontSize: 10, color: kTextMuted),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Chip row for choosing percentage type (none/discount/markup/tax) plus
+/// an inline value field. Editable per-transaction.
+class _PercentageEditor extends StatelessWidget {
+  final String? percType;
+  final TextEditingController controller;
+  final ValueChanged<String> onTypeChanged;
+
+  const _PercentageEditor({
+    required this.percType,
+    required this.controller,
+    required this.onTypeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const types = ['none', 'discount', 'markup', 'tax'];
+    final current = percType ?? 'none';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: types.map((t) {
+            final selected = current == t;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: GestureDetector(
+                onTap: () => onTypeChanged(t),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: selected ? kBlue : kCard,
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(color: selected ? kBlue : kBorder),
+                  ),
+                  child: Text(
+                    t == 'none' ? 'None' : t[0].toUpperCase() + t.substring(1),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: selected ? Colors.white : kTextSub,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (current != 'none') ...[
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(fontSize: 12),
+            decoration: const InputDecoration(
+              hintText: 'e.g., 10',
+              suffixText: '%',
+              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Shows the base rate, the on-screen adjustment override, and the
+/// resulting rate paid — then the total. Shown as soon as a supplier is
+/// selected so the user always sees the effective rate before entering qty.
 class _AmountSummary extends StatelessWidget {
   final double baseRate, adjustedRate, total;
   final double amountBeforePercentage, percentageValue;
   final String adjustmentLabel, percentageLabel;
   final bool hasAdjustment, hasPercentage;
-  
+
   const _AmountSummary({
     required this.baseRate,
     required this.adjustedRate,
@@ -525,8 +821,7 @@ class _AmountSummary extends StatelessWidget {
         _Row('Base Rate', '₹${baseRate.toStringAsFixed(2)} per 100 eggs'),
         _Row('Supplier Adjustment', adjustmentLabel),
         _Row('Rate Paid', '₹${adjustedRate.toStringAsFixed(2)} per 100 eggs'),
-        
-        // NEW: Percentage breakdown
+
         if (hasPercentage) ...[
           const SizedBox(height: 8),
           Container(
@@ -543,7 +838,7 @@ class _AmountSummary extends StatelessWidget {
             ),
           ),
         ],
-        
+
         const Divider(height: 14, color: kBorder),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -22,11 +22,19 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   final _notesController = TextEditingController();
   double adjustedRate = 0.0;
   double totalAmount = 0.0;
-  
+
   // Percentage fields
   double percentageValue = 0.0;
   double amountBeforePercentage = 0.0;
-  
+
+  // ── Inline rate / percentage override (editable per-sale, right on this screen) ──
+  String overrideAdjType = '=';
+  final _overrideAdjCtrl = TextEditingController();
+  String? overridePercType;
+  final _overridePercCtrl = TextEditingController();
+  bool _saveAsDefault = false;
+  Party? _previewParty; // transient Party built from the override fields above, used only for calculation
+
   bool isLoading = true;
   bool isSaving = false;
   String? error;
@@ -37,6 +45,8 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     super.initState();
     _loadData();
     _quantityController.addListener(_calculateAmount);
+    _overrideAdjCtrl.addListener(_calculateAmount);
+    _overridePercCtrl.addListener(_calculateAmount);
   }
 
   @override
@@ -57,6 +67,8 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   void dispose() {
     _quantityController.dispose();
     _notesController.dispose();
+    _overrideAdjCtrl.dispose();
+    _overridePercCtrl.dispose();
     super.dispose();
   }
 
@@ -86,6 +98,18 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     }
   }
 
+  String _trimZero(double v) => v % 1 == 0 ? v.toStringAsFixed(0) : v.toString();
+
+  /// Pre-fills the inline override controls from the party's saved
+  /// adjustment/percentage settings. Called whenever a party is selected.
+  void _setOverrideFromParty(Party p) {
+    overrideAdjType = p.adjustmentType;
+    _overrideAdjCtrl.text = p.adjustmentValue == 0 ? '' : _trimZero(p.adjustmentValue);
+    overridePercType = p.percentageType;
+    _overridePercCtrl.text = p.percentageValue == 0 ? '' : _trimZero(p.percentageValue);
+    _saveAsDefault = false;
+  }
+
   void _calculateAmount() {
     if (selectedParty == null || todayRate == null) {
       setState(() {
@@ -93,23 +117,38 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
         totalAmount = 0;
         amountBeforePercentage = 0;
         percentageValue = 0;
+        _previewParty = null;
       });
       return;
     }
     final qty = double.tryParse(_quantityController.text) ?? 0.0;
-    adjustedRate = selectedParty!.calculateAdjustedRate(todayRate!.baseRate);
+    final adjVal = double.tryParse(_overrideAdjCtrl.text) ?? 0.0;
+    final percVal = double.tryParse(_overridePercCtrl.text) ?? 0.0;
+
+    // Build a transient Party from the on-screen override values and reuse
+    // the exact same calculation methods the model already defines, so the
+    // math here can never drift from the rest of the app.
+    _previewParty = Party.now(
+      name: selectedParty!.name,
+      adjustmentType: overrideAdjType,
+      adjustmentValue: adjVal,
+      type: selectedParty!.type,
+      percentageType: percVal > 0 ? overridePercType : null,
+      percentageValue: percVal,
+    );
+
+    adjustedRate = _previewParty!.calculateAdjustedRate(todayRate!.baseRate);
     amountBeforePercentage = (adjustedRate * qty) / 100;
-    
-    // Apply percentage if party has one set
-    if (selectedParty!.hasPercentage) {
-      final breakdown = selectedParty!.getPercentageBreakdown(amountBeforePercentage);
+
+    if (_previewParty!.hasPercentage) {
+      final breakdown = _previewParty!.getPercentageBreakdown(amountBeforePercentage);
       totalAmount = breakdown['finalAmount'] ?? amountBeforePercentage;
       percentageValue = breakdown['percentageValue'] ?? 0;
     } else {
       totalAmount = amountBeforePercentage;
       percentageValue = 0;
     }
-    
+
     setState(() {});
   }
 
@@ -131,9 +170,10 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
 
     setState(() => isSaving = true);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final saleRate = selectedParty!.calculateAdjustedRate(latestRate.baseRate);
+    final preview = _previewParty ?? selectedParty!;
+    final saleRate = preview.calculateAdjustedRate(latestRate.baseRate);
     final baseSaleAmount = (saleRate * qty) / 100;
-    final saleAmount = selectedParty!.applyPercentageToAmount(baseSaleAmount);
+    final saleAmount = preview.applyPercentageToAmount(baseSaleAmount);
     final result = await dbHelper.insertSale(
       Sale.now(
         partyKey: selectedParty!.key as int,
@@ -148,6 +188,16 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       ),
     );
 
+    // If asked, push the on-screen override back to the party's permanent
+    // default so future sales to this party start from the new rate.
+    if (result.success && _saveAsDefault) {
+      selectedParty!.adjustmentType = preview.adjustmentType;
+      selectedParty!.adjustmentValue = preview.adjustmentValue;
+      selectedParty!.percentageType = preview.percentageType;
+      selectedParty!.percentageValue = preview.percentageValue;
+      await dbHelper.updateParty(selectedParty!);
+    }
+
     setState(() => isSaving = false);
     if (result.success) {
       _quantityController.clear();
@@ -158,6 +208,12 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
         totalAmount = 0;
         amountBeforePercentage = 0;
         percentageValue = 0;
+        overrideAdjType = '=';
+        _overrideAdjCtrl.clear();
+        overridePercType = null;
+        _overridePercCtrl.clear();
+        _saveAsDefault = false;
+        _previewParty = null;
       });
       _snack('Sale saved successfully!');
     } else {
@@ -274,6 +330,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                             (p) => p.name == name,
                             orElse: () => parties.last,
                           );
+                          _setOverrideFromParty(selectedParty!);
                         });
                         _calculateAmount();
                         _snack('Customer added!');
@@ -338,7 +395,10 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         label: 'Select Customer',
                         parties: parties,
                         onChanged: (p) {
-                          setState(() => selectedParty = p);
+                          setState(() {
+                            selectedParty = p;
+                            if (p != null) _setOverrideFromParty(p);
+                          });
                           _calculateAmount();
                         },
                         onAddNew: _addPartyInline,
@@ -356,6 +416,28 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                           suffixStyle: TextStyle(fontSize: 12, color: kTextSub),
                         ),
                       ),
+                      if (selectedParty != null) ...[
+                        const SizedBox(height: 14),
+                        _RateAdjustmentCard(
+                          partyName: selectedParty!.name,
+                          adjType: overrideAdjType,
+                          adjCtrl: _overrideAdjCtrl,
+                          onAdjTypeChanged: (v) {
+                            overrideAdjType = v;
+                            _calculateAmount();
+                          },
+                          percType: overridePercType,
+                          percCtrl: _overridePercCtrl,
+                          onPercTypeChanged: (v) {
+                            overridePercType = v;
+                            _calculateAmount();
+                          },
+                          saveAsDefault: _saveAsDefault,
+                          onSaveAsDefaultChanged: (v) =>
+                              setState(() => _saveAsDefault = v),
+                          actionLabel: 'sale',
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       const _SectionLabel('Notes (Optional)'),
                       const SizedBox(height: 6),
@@ -365,17 +447,17 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         style: const TextStyle(fontSize: 13, color: kText),
                         decoration: const InputDecoration(hintText: 'Any remarks...'),
                       ),
-                      if (selectedParty != null && todayRate != null) ...[
+                      if (selectedParty != null && todayRate != null && _previewParty != null) ...[
                     const SizedBox(height: 16),
                     _AmountSummary(
                       baseRate: todayRate!.baseRate,
                       adjustedRate: adjustedRate,
-                      adjustmentLabel: selectedParty!.adjustmentLabel,
-                      hasAdjustment: selectedParty!.hasAdjustment,
+                      adjustmentLabel: _previewParty!.adjustmentLabel,
+                      hasAdjustment: _previewParty!.hasAdjustment,
                       amountBeforePercentage: amountBeforePercentage,
                       percentageValue: percentageValue,
-                      percentageLabel: selectedParty!.percentageLabel,
-                      hasPercentage: selectedParty!.hasPercentage,
+                      percentageLabel: _previewParty!.percentageLabel,
+                      hasPercentage: _previewParty!.hasPercentage,
                       total: totalAmount,
                     ),
                   ],
@@ -475,12 +557,210 @@ class _RateBanner extends StatelessWidget {
       );
 }
 
+/// Inline, editable rate-adjustment + percentage card shown right on the
+/// Sale/Purchase entry screen. Lets the owner change the rate or
+/// percentage for *this* transaction on the fly, and optionally save it
+/// back as the party's new default via [onSaveAsDefaultChanged].
+class _RateAdjustmentCard extends StatelessWidget {
+  final String partyName;
+  final String adjType;
+  final TextEditingController adjCtrl;
+  final ValueChanged<String> onAdjTypeChanged;
+  final String? percType;
+  final TextEditingController percCtrl;
+  final ValueChanged<String?> onPercTypeChanged;
+  final bool saveAsDefault;
+  final ValueChanged<bool> onSaveAsDefaultChanged;
+  final String actionLabel; // 'sale' or 'purchase'
+
+  const _RateAdjustmentCard({
+    required this.partyName,
+    required this.adjType,
+    required this.adjCtrl,
+    required this.onAdjTypeChanged,
+    required this.percType,
+    required this.percCtrl,
+    required this.onPercTypeChanged,
+    required this.saveAsDefault,
+    required this.onSaveAsDefaultChanged,
+    required this.actionLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const adjModes = ['=', '+', '-', '+%', '-%'];
+    const percTypes = <String, String>{
+      'discount': 'Discount',
+      'markup': 'Markup',
+      'tax': 'Tax',
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Rate for this $actionLabel · $partyName',
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: kText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text('Rate Adjustment', style: TextStyle(fontSize: 11, color: kTextSub)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              ...adjModes.map((m) {
+                final selected = adjType == m;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 5),
+                  child: GestureDetector(
+                    onTap: () => onAdjTypeChanged(m),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 120),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: selected ? kBlue : kSurface,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: selected ? kBlue : kBorder),
+                      ),
+                      child: Text(
+                        m,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? Colors.white : kTextSub,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              if (adjType != '=') ...[
+                const SizedBox(width: 4),
+                Expanded(
+                  child: TextField(
+                    controller: adjCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: adjType.contains('%') ? '% value' : '₹ value',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Percentage (Discount / Markup / Tax)',
+            style: TextStyle(fontSize: 11, color: kTextSub),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _PercChip(
+                label: 'None',
+                selected: percType == null,
+                onTap: () => onPercTypeChanged(null),
+              ),
+              const SizedBox(width: 6),
+              ...percTypes.entries.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: _PercChip(
+                    label: e.value,
+                    selected: percType == e.key,
+                    onTap: () => onPercTypeChanged(e.key),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (percType != null) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: percCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 12),
+              decoration: const InputDecoration(
+                hintText: 'e.g., 10',
+                suffixText: '%',
+                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: () => onSaveAsDefaultChanged(!saveAsDefault),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: saveAsDefault,
+                  onChanged: (v) => onSaveAsDefaultChanged(v ?? false),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Save this as default rate for $partyName',
+                    style: const TextStyle(fontSize: 11, color: kTextSub),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PercChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _PercChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? Colors.cyan[600] : kSurface,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: selected ? Colors.cyan[600]! : kBorder),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : kTextSub,
+            ),
+          ),
+        ),
+      );
+}
+
 class _AmountSummary extends StatelessWidget {
   final double baseRate, adjustedRate, total;
   final double amountBeforePercentage, percentageValue;
   final String adjustmentLabel, percentageLabel;
   final bool hasAdjustment, hasPercentage;
-  
+
   const _AmountSummary({
     required this.baseRate,
     required this.adjustedRate,
@@ -506,7 +786,7 @@ class _AmountSummary extends StatelessWidget {
             _Row('Base Rate', '₹${baseRate.toStringAsFixed(2)} per 100 eggs'),
             _Row('Party Adjustment', adjustmentLabel),
             _Row('Sale Rate', '₹${adjustedRate.toStringAsFixed(2)} per 100 eggs'),
-            
+
             // Percentage breakdown
             if (hasPercentage) ...[
               const SizedBox(height: 8),
@@ -524,7 +804,7 @@ class _AmountSummary extends StatelessWidget {
                 ),
               ),
             ],
-            
+
             const Divider(height: 14, color: kBorder),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
