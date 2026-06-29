@@ -5,6 +5,7 @@ import 'models.dart';
 import 'database_helper.dart';
 import 'main.dart';
 import 'party_picker_sheet.dart';
+import 'party_statement_screen.dart';  // ADD THIS IMPORT
 
 class SaleEntryScreen extends StatefulWidget {
   const SaleEntryScreen({super.key});
@@ -390,18 +391,41 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                       const SizedBox(height: 14),
                       const _SectionLabel('Customer'),
                       const SizedBox(height: 6),
-                      PartySelectField(
-                        selected: selectedParty,
-                        label: 'Select Customer',
-                        parties: parties,
-                        onChanged: (p) {
-                          setState(() {
-                            selectedParty = p;
-                            if (p != null) _setOverrideFromParty(p);
-                          });
-                          _calculateAmount();
-                        },
-                        onAddNew: _addPartyInline,
+                      // MODIFIED: Added Row with Statement button
+                      Row(
+                        children: [
+                          Expanded(
+                            child: PartySelectField(
+                              selected: selectedParty,
+                              label: 'Select Customer',
+                              parties: parties,
+                              onChanged: (p) {
+                                setState(() {
+                                  selectedParty = p;
+                                  if (p != null) _setOverrideFromParty(p);
+                                });
+                                _calculateAmount();
+                              },
+                              onAddNew: _addPartyInline,
+                            ),
+                          ),
+                          if (selectedParty != null) ...[
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                              label: const Text('Statement'),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        PartyStatementScreen(party: selectedParty!),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 14),
                       const _SectionLabel('Egg Quantity'),
@@ -448,19 +472,19 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         decoration: const InputDecoration(hintText: 'Any remarks...'),
                       ),
                       if (selectedParty != null && todayRate != null && _previewParty != null) ...[
-                    const SizedBox(height: 16),
-                    _AmountSummary(
-                      baseRate: todayRate!.baseRate,
-                      adjustedRate: adjustedRate,
-                      adjustmentLabel: _previewParty!.adjustmentLabel,
-                      hasAdjustment: _previewParty!.hasAdjustment,
-                      amountBeforePercentage: amountBeforePercentage,
-                      percentageValue: percentageValue,
-                      percentageLabel: _previewParty!.percentageLabel,
-                      hasPercentage: _previewParty!.hasPercentage,
-                      total: totalAmount,
-                    ),
-                  ],
+                        const SizedBox(height: 16),
+                        _AmountSummary(
+                          baseRate: todayRate!.baseRate,
+                          adjustedRate: adjustedRate,
+                          adjustmentLabel: _previewParty!.adjustmentLabel,
+                          hasAdjustment: _previewParty!.hasAdjustment,
+                          amountBeforePercentage: amountBeforePercentage,
+                          percentageValue: percentageValue,
+                          percentageLabel: _previewParty!.percentageLabel,
+                          hasPercentage: _previewParty!.hasPercentage,
+                          total: totalAmount,
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,

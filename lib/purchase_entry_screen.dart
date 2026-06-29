@@ -5,6 +5,7 @@ import 'models.dart';
 import 'database_helper.dart';
 import 'main.dart';
 import 'party_picker_sheet.dart';
+import 'party_statement_screen.dart';  // ADD THIS IMPORT
 
 class PurchaseEntryScreen extends StatefulWidget {
   const PurchaseEntryScreen({super.key});
@@ -439,18 +440,41 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
 
                   const _SectionLabel('Supplier'),
                   const SizedBox(height: 6),
-                  PartySelectField(
-                    selected: selectedSupplier,
-                    label: 'Select Supplier',
-                    parties: suppliers,
-                    onChanged: (p) {
-                      setState(() {
-                        selectedSupplier = p;
-                        _applySupplierDefaults(p);
-                      });
-                      _calc();
-                    },
-                    onAddNew: _addSupplierInline,
+                  // MODIFIED: Added Row with Statement button
+                  Row(
+                    children: [
+                      Expanded(
+                        child: PartySelectField(
+                          selected: selectedSupplier,
+                          label: 'Select Supplier',
+                          parties: suppliers,
+                          onChanged: (p) {
+                            setState(() {
+                              selectedSupplier = p;
+                              _applySupplierDefaults(p);
+                            });
+                            _calc();
+                          },
+                          onAddNew: _addSupplierInline,
+                        ),
+                      ),
+                      if (selectedSupplier != null) ...[
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.receipt_long_rounded, size: 16),
+                          label: const Text('Statement'),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    PartyStatementScreen(party: selectedSupplier!),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 14),
 

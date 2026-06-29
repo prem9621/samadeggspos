@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'main.dart';
+import 'monthly_data_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -135,6 +136,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Monthly Data
+          Container(
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kBorder),
+            ),
+            child: _SettingsTile(
+              icon: Icons.calendar_month_rounded,
+              label: 'Monthly Data',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MonthlyDataScreen(),
+                  ),
+                );
+              },
             ),
           ),
 

@@ -639,16 +639,180 @@ class DatabaseHelper {
   Future<DatabaseResult<double>> getDailyProfit(String date) async {
     try {
       final salesResult = await getTotalSalesAmountOnDate(date);
+      final purchasesResult = await getTotalPurchasesAmountOnDate(date);
       final expensesResult = await getTotalExpensesOnDate(date);
-      if (!salesResult.success || !expensesResult.success) {
+      if (!salesResult.success || !purchasesResult.success || !expensesResult.success) {
         return DatabaseResult.failure(
-          salesResult.error ?? expensesResult.error,
+          salesResult.error ?? purchasesResult.error ?? expensesResult.error,
         );
       }
-      final profit = (salesResult.data ?? 0) - (expensesResult.data ?? 0);
+      final profit = (salesResult.data ?? 0) - (purchasesResult.data ?? 0) - (expensesResult.data ?? 0);
       return DatabaseResult.success(profit);
     } catch (e) {
       return DatabaseResult.failure('Failed to calculate profit: $e');
+    }
+  }
+
+  Future<DatabaseResult<double>> getTotalPurchasesAmountOnDate(String date) async {
+    try {
+      final result = await getPurchasesByDate(date);
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      double total = 0;
+      for (final p in result.data ?? []) {
+        total += p.purchase.amount;
+      }
+      return DatabaseResult.success(total);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to calculate purchases amount: $e');
+    }
+  }
+
+  Future<DatabaseResult<double>> getTotalEggsPurchasedOnDate(String date) async {
+    try {
+      final result = await getPurchasesByDate(date);
+      if (!result.success) {
+        return DatabaseResult.failure(result.error);
+      }
+      double total = 0;
+      for (final p in result.data ?? []) {
+        total += p.purchase.eggQuantity;
+      }
+      return DatabaseResult.success(total);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to calculate eggs purchased: $e');
+    }
+  }
+
+  Future<DatabaseResult<Map<String, dynamic>>> getDailyStats(String date) async {
+    try {
+      final rateResult = await getDailyRateByDate(date);
+      final salesResult = await getTotalSalesAmountOnDate(date);
+      final eggsSoldResult = await getTotalEggsSoldOnDate(date);
+      final purchasesResult = await getTotalPurchasesAmountOnDate(date);
+      final eggsPurchasedResult = await getTotalEggsPurchasedOnDate(date);
+      final expensesResult = await getTotalExpensesOnDate(date);
+      final profitResult = await getDailyProfit(date);
+
+      return DatabaseResult.success({
+        'date': date,
+        'rate': rateResult.data?.baseRate,
+        'totalSales': salesResult.data ?? 0,
+        'eggsSold': eggsSoldResult.data ?? 0,
+        'totalPurchases': purchasesResult.data ?? 0,
+        'eggsPurchased': eggsPurchasedResult.data ?? 0,
+        'totalExpenses': expensesResult.data ?? 0,
+        'profit': profitResult.data ?? 0,
+      });
+    } catch (e) {
+      return DatabaseResult.failure('Failed to get daily stats: $e');
+    }
+  }
+
+  Future<DatabaseResult<List<String>>> getAvailableMonths() async {
+    try {
+      final Set<String> months = {};
+      
+      // Check all sources for dates
+      final ratesResult = await getAllDailyRates();
+      if (ratesResult.success) {
+        for (final rate in ratesResult.data ?? []) {
+          final date = DateFormat('yyyy-MM-dd').parse(rate.date);
+          months.add(DateFormat('yyyy-MM').format(date));
+        }
+      }
+      
+      final salesResult = await getAllSales();
+      if (salesResult.success) {
+        for (final s in salesResult.data ?? []) {
+          final date = DateFormat('yyyy-MM-dd').parse(s.sale.saleDate);
+          months.add(DateFormat('yyyy-MM').format(date));
+        }
+      }
+      
+      final purchasesResult = await getAllPurchases();
+      if (purchasesResult.success) {
+        for (final p in purchasesResult.data ?? []) {
+          final date = DateFormat('yyyy-MM-dd').parse(p.purchase.purchaseDate);
+          months.add(DateFormat('yyyy-MM').format(date));
+        }
+      }
+      
+      final expensesResult = await getAllExpenses();
+      if (expensesResult.success) {
+        for (final e in expensesResult.data ?? []) {
+          final date = DateFormat('yyyy-MM-dd').parse(e.date);
+          months.add(DateFormat('yyyy-MM').format(date));
+        }
+      }
+
+      final sortedMonths = months.toList()..sort((a, b) => b.compareTo(a));
+      return DatabaseResult.success(sortedMonths);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to get available months: $e');
+    }
+  }
+
+  Future<DatabaseResult<List<Map<String, dynamic>>>> getMonthlyStats(String yearMonth) async {
+    try {
+      final List<Map<String, dynamic>> dailyStats = [];
+      
+      // Parse the year and month
+      final parts = yearMonth.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      
+      // Get all dates in the month
+      final lastDay = DateTime(year, month + 1, 0);
+      
+      for (int day = 1; day <= lastDay.day; day++) {
+        final dateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, day));
+        final statsResult = await getDailyStats(dateStr);
+        if (statsResult.success) {
+          dailyStats.add(statsResult.data!);
+        }
+      }
+      
+      return DatabaseResult.success(dailyStats);
+    } catch (e) {
+      return DatabaseResult.failure('Failed to get monthly stats: $e');
+    }
+  }
+
+  Future<DatabaseResult<Map<String, double>>> getMonthlyTotals(String yearMonth) async {
+    try {
+      final monthlyStatsResult = await getMonthlyStats(yearMonth);
+      if (!monthlyStatsResult.success) {
+        return DatabaseResult.failure(monthlyStatsResult.error);
+      }
+      
+      double totalSales = 0;
+      double totalEggsSold = 0;
+      double totalPurchases = 0;
+      double totalEggsPurchased = 0;
+      double totalExpenses = 0;
+      double totalProfit = 0;
+      
+      for (final dayStats in monthlyStatsResult.data ?? []) {
+        totalSales += dayStats['totalSales'] as double;
+        totalEggsSold += dayStats['eggsSold'] as double;
+        totalPurchases += dayStats['totalPurchases'] as double;
+        totalEggsPurchased += dayStats['eggsPurchased'] as double;
+        totalExpenses += dayStats['totalExpenses'] as double;
+        totalProfit += dayStats['profit'] as double;
+      }
+      
+      return DatabaseResult.success({
+        'totalSales': totalSales,
+        'totalEggsSold': totalEggsSold,
+        'totalPurchases': totalPurchases,
+        'totalEggsPurchased': totalEggsPurchased,
+        'totalExpenses': totalExpenses,
+        'totalProfit': totalProfit,
+      });
+    } catch (e) {
+      return DatabaseResult.failure('Failed to get monthly totals: $e');
     }
   }
 
@@ -688,7 +852,7 @@ class DatabaseHelper {
     }
   }
 
-  Future<DatabaseResult<Map<String, double>>> getMonthlyStats() async {
+  Future<DatabaseResult<Map<String, double>>> getCurrentMonthlyStats() async {
     try {
       final now = DateTime.now();
       double totalRevenue = 0;
