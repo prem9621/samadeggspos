@@ -97,6 +97,12 @@ class _PartiesScreenState extends State<PartiesScreen>
     final percCtrl = TextEditingController(
       text: (party?.percentageValue ?? 0) == 0 ? '' : party!.percentageValue.toString(),
     );
+    // NEW: Minimum quantity for percentage to apply
+    final percMinQtyCtrl = TextEditingController(
+      text: (party?.percentageMinQuantity ?? 0) == 0
+          ? ''
+          : party!.percentageMinQuantity.toString(),
+    );
 
     String adjType = party?.adjustmentType ?? '=';
     PartyType pType = party?.type ?? PartyType.customer;
@@ -206,7 +212,7 @@ class _PartiesScreenState extends State<PartiesScreen>
                 ),
                 const SizedBox(height: 14),
 
-                // ✨ NEW: Percentage Section
+                // Percentage Section
                 const Text(
                   'Percentage Settings (Optional)',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kText),
@@ -267,6 +273,21 @@ class _PartiesScreenState extends State<PartiesScreen>
                       'Leave empty or 0 to disable percentage adjustment',
                       style: const TextStyle(fontSize: 10, color: kTextMuted),
                     ),
+                    // NEW: Minimum quantity field
+                    const SizedBox(height: 10),
+                    _Field(
+                      controller: percMinQtyCtrl,
+                      label: 'Minimum Quantity (Optional)',
+                      hint: 'e.g., 500',
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Leave empty or 0 to apply the percentage on every sale, '
+                      'regardless of quantity. Otherwise it only applies when '
+                      'the egg quantity is at least this many.',
+                      style: TextStyle(fontSize: 10, color: kTextMuted),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -293,11 +314,19 @@ class _PartiesScreenState extends State<PartiesScreen>
                       }
                       final adjVal = double.tryParse(adjCtrl.text) ?? 0.0;
                       final percVal = double.tryParse(percCtrl.text) ?? 0.0;
+                      final percMinQty = double.tryParse(percMinQtyCtrl.text) ?? 0.0;
 
                       // Validate percentage
                       if (percVal < 0 || percVal > 100) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Percentage must be 0-100')),
+                        );
+                        return;
+                      }
+                      // Validate minimum quantity
+                      if (percMinQty < 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Minimum quantity cannot be negative')),
                         );
                         return;
                       }
@@ -315,6 +344,7 @@ class _PartiesScreenState extends State<PartiesScreen>
                             type: pType,
                             percentageType: percVal > 0 ? percType : null,
                             percentageValue: percVal,
+                            percentageMinQuantity: percMinQty,
                           ),
                         );
                       } else {
@@ -328,6 +358,7 @@ class _PartiesScreenState extends State<PartiesScreen>
                         party.type = pType;
                         party.percentageType = percVal > 0 ? percType : null;
                         party.percentageValue = percVal;
+                        party.percentageMinQuantity = percMinQty;
                         r = await dbHelper.updateParty(party);
                       }
 
@@ -363,7 +394,7 @@ class _PartiesScreenState extends State<PartiesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kSurface,
+      backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showPartyDialog(),
         child: const Icon(Icons.person_add_rounded),
@@ -742,7 +773,7 @@ class _PartyList extends StatelessWidget {
                         ),
                       ),
                     ),
-                  // NEW: Percentage badge
+                  // Percentage badge (type + value only — min qty shown separately below)
                   if (p.hasPercentage)
                     Container(
                       margin: const EdgeInsets.only(right: 6),
@@ -760,6 +791,29 @@ class _PartyList extends StatelessWidget {
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
                           color: Colors.cyan[900],
+                        ),
+                      ),
+                    ),
+                  // NEW: Quantity badge — shows the minimum quantity set for
+                  // this party, independent of whether percentage is active,
+                  // so it's visible even if only quantity was configured.
+                  if (p.percentageMinQuantity > 0)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: kBlueLight,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        'Qty ≥${p.percentageMinQuantity.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: kBlue,
                         ),
                       ),
                     ),

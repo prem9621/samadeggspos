@@ -18,10 +18,32 @@ class _DailyRateScreenState extends State<DailyRateScreen> {
   bool isLoading = true;
   String? error;
 
+  // Tracks the last AppState.rateRevision we've reloaded for. Whenever
+  // a rate is set from ANY screen (e.g. the Dashboard's quick-set
+  // sheet), AppState.notifyRatesChanged() bumps this counter. Since
+  // this screen stays alive inside the MainScreen's IndexedStack, its
+  // own initState()-only load never re-runs on its own — this is what
+  // watches for that change and triggers a reload automatically.
+  int? _lastRateRevision;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final rev = context.watch<AppState>().rateRevision;
+    if (_lastRateRevision == null) {
+      // First run — just record the current revision, initState()
+      // already triggered the initial load.
+      _lastRateRevision = rev;
+    } else if (rev != _lastRateRevision) {
+      _lastRateRevision = rev;
+      _load();
+    }
   }
 
   Future<void> _load() async {

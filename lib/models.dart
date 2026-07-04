@@ -78,12 +78,17 @@ class Party extends HiveObject {
   @HiveField(8)
   PartyType type; // Customer or Supplier
 
-  // NEW: Percentage fields for Party
+  // Percentage fields for Party
   @HiveField(9)
   String? percentageType; // 'discount', 'markup', 'tax', or null
 
   @HiveField(10)
   double percentageValue; // The % amount (e.g., 10 for 10%)
+
+  // NEW: Minimum egg quantity required before the percentage kicks in.
+  // 0 (or less) means "no minimum" — percentage always applies.
+  @HiveField(11)
+  double percentageMinQuantity;
 
   Party({
     required this.name,
@@ -97,6 +102,7 @@ class Party extends HiveObject {
     this.type = PartyType.customer,
     this.percentageType,
     this.percentageValue = 0.0,
+    this.percentageMinQuantity = 0.0,
   });
 
   factory Party.now({
@@ -109,6 +115,7 @@ class Party extends HiveObject {
     PartyType type = PartyType.customer,
     String? percentageType,
     double percentageValue = 0.0,
+    double percentageMinQuantity = 0.0,
   }) {
     final now = DateTime.now();
     return Party(
@@ -123,6 +130,7 @@ class Party extends HiveObject {
       type: type,
       percentageType: percentageType,
       percentageValue: percentageValue,
+      percentageMinQuantity: percentageMinQuantity,
     );
   }
 
@@ -146,9 +154,23 @@ class Party extends HiveObject {
     }
   }
 
-  /// Apply percentage adjustment to an amount
-  double applyPercentageToAmount(double amount) {
-    if (percentageType == null || percentageValue == 0) {
+  /// True if a percentage is configured AND, given [quantity] of eggs in
+  /// this transaction, the minimum-quantity requirement (if any) is met.
+  /// Pass the transaction's egg quantity here — not just [hasPercentage].
+  bool percentageActiveForQuantity(double quantity) {
+    if (!hasPercentage) return false;
+    if (percentageMinQuantity <= 0) return true;
+    return quantity >= percentageMinQuantity;
+  }
+
+  /// Apply percentage adjustment to an amount.
+  /// [quantity] is the egg quantity for this transaction — needed so the
+  /// minimum-quantity threshold can be checked. Defaults to a value that
+  /// always passes the threshold check for callers that don't track
+  /// quantity-gated percentages.
+  double applyPercentageToAmount(double amount, [double? quantity]) {
+    final qty = quantity ?? double.infinity;
+    if (!percentageActiveForQuantity(qty)) {
       return amount;
     }
 
@@ -167,9 +189,12 @@ class Party extends HiveObject {
     }
   }
 
-  /// Get percentage breakdown for display
-  Map<String, double> getPercentageBreakdown(double amount) {
-    if (percentageType == null || percentageValue == 0) {
+  /// Get percentage breakdown for display.
+  /// [quantity] is the egg quantity for this transaction — needed so the
+  /// minimum-quantity threshold can be checked.
+  Map<String, double> getPercentageBreakdown(double amount, [double? quantity]) {
+    final qty = quantity ?? double.infinity;
+    if (!percentageActiveForQuantity(qty)) {
       return {
         'baseAmount': amount,
         'percentageValue': 0,
@@ -179,7 +204,7 @@ class Party extends HiveObject {
     }
 
     final percentageAmount = (amount * percentageValue) / 100;
-    double finalAmount = applyPercentageToAmount(amount);
+    double finalAmount = applyPercentageToAmount(amount, qty);
 
     return {
       'baseAmount': amount,
@@ -214,13 +239,22 @@ class Party extends HiveObject {
       return 'None';
     }
     final typeLabel = percentageType![0].toUpperCase() + percentageType!.substring(1);
-    return '$typeLabel: ${percentageValue.toStringAsFixed(percentageValue % 1 == 0 ? 0 : 1)}%';
+    final base = '$typeLabel: ${percentageValue.toStringAsFixed(percentageValue % 1 == 0 ? 0 : 1)}%';
+    if (percentageMinQuantity > 0) {
+      final qtyStr = percentageMinQuantity % 1 == 0
+          ? percentageMinQuantity.toStringAsFixed(0)
+          : percentageMinQuantity.toString();
+      return '$base (min $qtyStr eggs)';
+    }
+    return base;
   }
 
   /// True if this party has any adjustment away from the base rate.
   bool get hasAdjustment => adjustmentType != '=' && adjustmentValue != 0;
 
-  /// True if this party has percentage adjustment
+  /// True if this party has percentage adjustment configured at all
+  /// (regardless of any minimum-quantity threshold — use
+  /// [percentageActiveForQuantity] to check against a specific sale).
   bool get hasPercentage => percentageType != null && percentageValue != 0;
 }
 

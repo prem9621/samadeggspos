@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'models.dart';
 import 'database_helper.dart';
+import 'stats_helper.dart';
+import 'top_parties_dues_screen.dart';
 import 'main.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -13,6 +16,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final dbHelper = DatabaseHelper.instance;
+  final statsHelper = StatsHelper.instance;
 
   DailyRate? todayRate;
   List<dynamic> todayTransactions = [];
@@ -21,10 +25,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool isLoading = true;
   String? error;
 
+  // ── New: Business Intelligence state ──────────────────────────────
+  double currentStock = 0;
+  Map<String, double> monthProfitLoss = {};
+  List<PartyRanked> topCustomers = [];
+  List<PartyRanked> topSuppliers = [];
+  List<PendingDue> pendingDues = [];
+  List<TrendPoint> trendPoints = [];
+  bool isStatsLoading = true;
+  String? statsError;
+
+  // Tracks the last AppState.rateRevision we've reloaded for. This
+  // screen stays alive inside MainScreen's IndexedStack, so its own
+  // initState()-only load never re-runs by itself when the rate is
+  // set from a different screen (e.g. the Rate tab) — this watches
+  // for that change and triggers a reload automatically.
+  int? _lastRateRevision;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _loadStats();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final rev = context.watch<AppState>().rateRevision;
+    if (_lastRateRevision == null) {
+      _lastRateRevision = rev;
+    } else if (rev != _lastRateRevision) {
+      _lastRateRevision = rev;
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -85,6 +119,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Loads all Business Intelligence data — stock, month profit-loss,
+  /// top parties, pending dues, and the 30-day trend — in one batch,
+  /// separate from the "today" load above so a slow stats fetch never
+  /// blocks today's transaction list from showing.
+  Future<void> _loadStats() async {
+    setState(() {
+      isStatsLoading = true;
+      statsError = null;
+    });
+    try {
+      final stockR = await statsHelper.getCurrentStock();
+      final plR = await statsHelper.getThisMonthProfitLoss();
+      final customersR =
+          await statsHelper.getTopParties(type: PartyType.customer, limit: 5);
+      final suppliersR =
+          await statsHelper.getTopParties(type: PartyType.supplier, limit: 5);
+      final duesR = await statsHelper.getPendingDues();
+      final trendR = await statsHelper.getRecentTrend(days: 30);
+
+      if (!mounted) return;
+      setState(() {
+        isStatsLoading = false;
+        currentStock = stockR.data ?? 0;
+        monthProfitLoss = plR.data ?? {};
+        topCustomers = customersR.data ?? [];
+        topSuppliers = suppliersR.data ?? [];
+        pendingDues = duesR.data ?? [];
+        trendPoints = trendR.data ?? [];
+        statsError = stockR.error ??
+            plR.error ??
+            customersR.error ??
+            suppliersR.error ??
+            duesR.error ??
+            trendR.error;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          isStatsLoading = false;
+          statsError = 'Failed to load stats: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([_load(), _loadStats()]);
+  }
+
   DateTime _txnTime(dynamic t) {
     final type = t['type'] as String;
     if (type == 'sale') return (t['data'] as SaleWithParty).sale.createdAt;
@@ -128,7 +211,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: kSurface,
       body: RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: _refreshAll,
         color: kBlue,
         child: isLoading
             ? const Center(child: CircularProgressIndicator(color: kBlue))
@@ -190,6 +273,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 14),
         ],
 
+        // ══════════════════════════════════════════════════════════
+        // ── NEW: Business Intelligence section ──────────────────────
+        // ══════════════════════════════════════════════════════════
+        if (!isStatsLoading && statsError == null) ...[
+          _StockAndProfitRow(
+            currentStock: currentStock,
+            profit: monthProfitLoss['profit'] ?? 0,
+          ),
+          const SizedBox(height: 14),
+
+          if (trendPoints.isNotEmpty) ...[
+            _TrendChartCard(points: trendPoints),
+            const SizedBox(height: 14),
+          ],
+
+          _CompactStatsRow(
+            topCustomers: topCustomers,
+            topSuppliers: topSuppliers,
+            dues: pendingDues,
+            onCustomersTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const TopPartiesDuesScreen(initialTab: 0),
+              ),
+            ),
+            onSuppliersTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const TopPartiesDuesScreen(initialTab: 1),
+              ),
+            ),
+            onDuesTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const TopPartiesDuesScreen(initialTab: 2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+        ] else if (isStatsLoading) ...[
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: CircularProgressIndicator(color: kBlue, strokeWidth: 2),
+            ),
+          ),
+        ],
+        // ══════════════════════════════════════════════════════════
+
         // ── Transactions header
         Row(
           children: [
@@ -216,6 +348,364 @@ class _DashboardScreenState extends State<DashboardScreen> {
         else
           ...todayTransactions.map((t) => _TransactionRow(transaction: t)),
       ],
+    );
+  }
+}
+
+// ─── NEW: Stock + Profit Row ──────────────────────────────────────────────────
+class _StockAndProfitRow extends StatelessWidget {
+  final double currentStock;
+  final double profit;
+  const _StockAndProfitRow({required this.currentStock, required this.profit});
+
+  @override
+  Widget build(BuildContext context) {
+    final isNegativeStock = currentStock < 0;
+    final isProfit = profit >= 0;
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kBorder),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: isNegativeStock
+                        ? const Color(0xFFFEE2E2)
+                        : kAmberLight,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Icon(
+                    Icons.inventory_2_rounded,
+                    color: isNegativeStock ? kRed : kAmber,
+                    size: 15,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Stock',
+                        style: TextStyle(fontSize: 10, color: kTextSub),
+                      ),
+                      Text(
+                        '${currentStock.toStringAsFixed(0)} eggs',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isNegativeStock ? kRed : kText,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kBorder),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: isProfit
+                        ? const Color(0xFFDCFCE7)
+                        : const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Icon(
+                    isProfit
+                        ? Icons.trending_up_rounded
+                        : Icons.trending_down_rounded,
+                    color: isProfit ? kGreen : kRed,
+                    size: 15,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'This Month',
+                        style: TextStyle(fontSize: 10, color: kTextSub),
+                      ),
+                      Text(
+                        '₹${profit.abs().toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isProfit ? kGreen : kRed,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── NEW: Trend Chart Card ────────────────────────────────────────────────────
+class _TrendChartCard extends StatelessWidget {
+  final List<TrendPoint> points;
+  const _TrendChartCard({required this.points});
+
+  @override
+  Widget build(BuildContext context) {
+    final maxSales = points.fold<double>(
+      0,
+      (max, p) => p.salesAmount > max ? p.salesAmount : max,
+    );
+    final maxY = maxSales <= 0 ? 100.0 : maxSales * 1.2;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Sales Trend (30 days)',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kText,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 130,
+            child: maxSales <= 0
+                ? const Center(
+                    child: Text(
+                      'No sales yet in this period',
+                      style: TextStyle(fontSize: 11, color: kTextSub),
+                    ),
+                  )
+                : LineChart(
+                    LineChartData(
+                      minY: 0,
+                      maxY: maxY,
+                      gridData: const FlGridData(show: false),
+                      titlesData: const FlTitlesData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineTouchData: LineTouchData(
+                        touchTooltipData: LineTouchTooltipData(
+                          getTooltipItems: (spots) => spots.map((s) {
+                            final point = points[s.x.toInt()];
+                            final label =
+                                DateFormat('d MMM').format(point.date);
+                            return LineTooltipItem(
+                              '$label\n₹${point.salesAmount.toStringAsFixed(0)}',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: [
+                            for (int i = 0; i < points.length; i++)
+                              FlSpot(i.toDouble(), points[i].salesAmount),
+                          ],
+                          isCurved: true,
+                          color: kBlue,
+                          barWidth: 2,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: kBlue.withOpacity(0.08),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── NEW: Compact Parties & Dues Row ──────────────────────────────────────────
+// Replaces three stacked cards (Top Customers / Top Suppliers / Pending
+// Dues) with a single low-height row — three tappable segments sharing
+// one card, each showing just the top highlight. Full lists live in
+// TopPartiesDuesScreen via "View All", reached by tapping a segment.
+class _CompactStatsRow extends StatelessWidget {
+  final List<PartyRanked> topCustomers;
+  final List<PartyRanked> topSuppliers;
+  final List<PendingDue> dues;
+  final VoidCallback onCustomersTap;
+  final VoidCallback onSuppliersTap;
+  final VoidCallback onDuesTap;
+
+  const _CompactStatsRow({
+    required this.topCustomers,
+    required this.topSuppliers,
+    required this.dues,
+    required this.onCustomersTap,
+    required this.onSuppliersTap,
+    required this.onDuesTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final totalDueAmount =
+        dues.fold<double>(0, (sum, d) => sum + d.balance.abs());
+
+    return Container(
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _CompactStatSegment(
+                icon: Icons.people_alt_rounded,
+                iconColor: kGreen,
+                label: 'Customers',
+                value: topCustomers.isEmpty
+                    ? '—'
+                    : '₹${topCustomers.first.totalAmount.toStringAsFixed(0)}',
+                subLabel: topCustomers.isEmpty
+                    ? 'No data'
+                    : topCustomers.first.party.name,
+                onTap: onCustomersTap,
+              ),
+            ),
+            const VerticalDivider(width: 1, color: kBorder),
+            Expanded(
+              child: _CompactStatSegment(
+                icon: Icons.local_shipping_rounded,
+                iconColor: kBlue,
+                label: 'Suppliers',
+                value: topSuppliers.isEmpty
+                    ? '—'
+                    : '₹${topSuppliers.first.totalAmount.toStringAsFixed(0)}',
+                subLabel: topSuppliers.isEmpty
+                    ? 'No data'
+                    : topSuppliers.first.party.name,
+                onTap: onSuppliersTap,
+              ),
+            ),
+            const VerticalDivider(width: 1, color: kBorder),
+            Expanded(
+              child: _CompactStatSegment(
+                icon: Icons.warning_amber_rounded,
+                iconColor: dues.isEmpty ? kTextMuted : kRed,
+                label: 'Dues',
+                value: dues.isEmpty
+                    ? '₹0'
+                    : '₹${totalDueAmount.toStringAsFixed(0)}',
+                subLabel: dues.isEmpty
+                    ? 'Settled'
+                    : '${dues.length} pending',
+                onTap: onDuesTap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactStatSegment extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+  final String subLabel;
+  final VoidCallback onTap;
+
+  const _CompactStatSegment({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+    required this.subLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 13, color: iconColor),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 10, color: kTextSub),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: kText,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 1),
+            Text(
+              subLabel,
+              style: const TextStyle(fontSize: 9, color: kTextMuted),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

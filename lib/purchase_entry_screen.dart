@@ -23,6 +23,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   final _notesCtrl = TextEditingController();
   final _adjValueController = TextEditingController();
   final _percValueController = TextEditingController();
+  final _percMinQtyController = TextEditingController(); // NEW
 
   // No manual rate textbox. The rate paid to the supplier is today's
   // base rate run through an adjustment — normally the supplier's saved
@@ -40,6 +41,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   double _adjValue = 0.0;
   String? _percType;
   double _percValue = 0.0;
+  double _percMinQty = 0.0; // NEW: minimum egg quantity for % to apply
 
   bool isLoading = true;
   bool isSaving = false;
@@ -53,6 +55,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     _qtyCtrl.addListener(_calc);
     _adjValueController.addListener(_onAdjValueChanged);
     _percValueController.addListener(_onPercValueChanged);
+    _percMinQtyController.addListener(_onPercMinQtyChanged); // NEW
   }
 
   @override
@@ -61,6 +64,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     _notesCtrl.dispose();
     _adjValueController.dispose();
     _percValueController.dispose();
+    _percMinQtyController.dispose(); // NEW
     super.dispose();
   }
 
@@ -85,6 +89,12 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
 
   void _onPercValueChanged() {
     _percValue = double.tryParse(_percValueController.text) ?? 0.0;
+    _calc();
+  }
+
+  void _onPercMinQtyChanged() {
+    // NEW
+    _percMinQty = double.tryParse(_percMinQtyController.text) ?? 0.0;
     _calc();
   }
 
@@ -127,6 +137,8 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     _percType = p?.percentageType;
     _percValue = p?.percentageValue ?? 0.0;
     _percValueController.text = _percValue == 0 ? '' : _percValue.toString();
+    _percMinQty = p?.percentageMinQuantity ?? 0.0; // NEW
+    _percMinQtyController.text = _percMinQty == 0 ? '' : _percMinQty.toString(); // NEW
   }
 
   void _resetToSupplierDefault() {
@@ -153,13 +165,22 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     }
   }
 
-  double _percentageAmountFor(double amount) {
-    if (_percType == null || _percValue == 0) return 0;
+  /// True if a percentage is configured AND the given [qty] meets the
+  /// minimum-quantity threshold (0/empty = always applies).
+  bool _percentageActiveFor(double qty) {
+    // NEW
+    if (_percType == null || _percValue == 0) return false;
+    if (_percMinQty <= 0) return true;
+    return qty >= _percMinQty;
+  }
+
+  double _percentageAmountFor(double amount, double qty) {
+    if (!_percentageActiveFor(qty)) return 0;
     return (amount * _percValue) / 100;
   }
 
-  double _applyPercentageFor(double amount) {
-    if (_percType == null || _percValue == 0) return amount;
+  double _applyPercentageFor(double amount, double qty) {
+    if (!_percentageActiveFor(qty)) return amount;
     final pv = (amount * _percValue) / 100;
     switch (_percType) {
       case 'discount':
@@ -192,7 +213,13 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   String get _percLabel {
     if (_percType == null || _percValue == 0) return 'None';
     final t = _percType![0].toUpperCase() + _percType!.substring(1);
-    return '$t: ${_percValue.toStringAsFixed(_percValue % 1 == 0 ? 0 : 1)}%';
+    final base = '$t: ${_percValue.toStringAsFixed(_percValue % 1 == 0 ? 0 : 1)}%';
+    if (_percMinQty > 0) {
+      // NEW
+      final qtyStr = _percMinQty % 1 == 0 ? _percMinQty.toStringAsFixed(0) : _percMinQty.toString();
+      return '$base (min $qtyStr eggs)';
+    }
+    return base;
   }
 
   /// Recalculates the supplier's effective rate from today's base rate
@@ -214,9 +241,10 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     // baseRate is per 100 eggs, so: amount = adjustedRate * qty / 100
     amountBeforePercentage = (adjustedRate * qty) / 100;
 
-    if (_percType != null && _percValue != 0) {
-      percentageValue = _percentageAmountFor(amountBeforePercentage);
-      totalAmount = _applyPercentageFor(amountBeforePercentage);
+    if (_percentageActiveFor(qty)) {
+      // MODIFIED: gate on quantity threshold
+      percentageValue = _percentageAmountFor(amountBeforePercentage, qty);
+      totalAmount = _applyPercentageFor(amountBeforePercentage, qty);
     } else {
       totalAmount = amountBeforePercentage;
       percentageValue = 0;
@@ -246,7 +274,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       return;
     }
     final basePurchaseAmount = (purchaseRate * qty) / 100;
-    final purchaseAmount = _applyPercentageFor(basePurchaseAmount);
+    final purchaseAmount = _applyPercentageFor(basePurchaseAmount, qty); // MODIFIED: pass qty
 
     setState(() => isSaving = true);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -278,6 +306,8 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
         _percType = null;
         _percValue = 0;
         _percValueController.clear();
+        _percMinQty = 0; // NEW
+        _percMinQtyController.clear(); // NEW
       });
       _snack('Purchase saved!');
     } else {
@@ -422,7 +452,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kSurface,
+      backgroundColor: Colors.transparent,
       body: isLoading
           ? const Center(child: CircularProgressIndicator(color: kAmber))
           : SingleChildScrollView(
@@ -476,6 +506,34 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                       ],
                     ],
                   ),
+                  // NEW: Shows the selected supplier's saved minimum-quantity
+                  // setting (same badge style as the Parties list screen) so
+                  // it's visible right away after picking a supplier here.
+                  if (selectedSupplier != null &&
+                      selectedSupplier!.percentageMinQuantity > 0) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: kBlueLight,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Qty ≥${selectedSupplier!.percentageMinQuantity.toStringAsFixed(0)} eggs',
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: kBlue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
 
                   const _SectionLabel('Egg Quantity'),
@@ -535,6 +593,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                     _PercentageEditor(
                       percType: _percType,
                       controller: _percValueController,
+                      minQtyController: _percMinQtyController, // NEW
                       onTypeChanged: (v) {
                         setState(() => _percType = v == 'none' ? null : v);
                         _calc();
@@ -567,7 +626,9 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                       amountBeforePercentage: amountBeforePercentage,
                       percentageValue: percentageValue,
                       percentageLabel: _percLabel,
-                      hasPercentage: _percType != null && _percValue != 0,
+                      hasPercentage: _percentageActiveFor(
+                        double.tryParse(_qtyCtrl.text) ?? 0.0,
+                      ), // MODIFIED: gate on quantity threshold
                       total: totalAmount,
                     ),
                   ],
@@ -746,15 +807,18 @@ class _AdjustmentEditor extends StatelessWidget {
 }
 
 /// Chip row for choosing percentage type (none/discount/markup/tax) plus
-/// an inline value field. Editable per-transaction.
+/// an inline value field, plus a minimum-quantity field. Editable
+/// per-transaction.
 class _PercentageEditor extends StatelessWidget {
   final String? percType;
   final TextEditingController controller;
+  final TextEditingController minQtyController; // NEW
   final ValueChanged<String> onTypeChanged;
 
   const _PercentageEditor({
     required this.percType,
     required this.controller,
+    required this.minQtyController, // NEW
     required this.onTypeChanged,
   });
 
@@ -804,6 +868,23 @@ class _PercentageEditor extends StatelessWidget {
               suffixText: '%',
               contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             ),
+          ),
+          // NEW: Minimum quantity field
+          const SizedBox(height: 8),
+          TextField(
+            controller: minQtyController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(fontSize: 12),
+            decoration: const InputDecoration(
+              hintText: 'Minimum quantity (optional)',
+              suffixText: 'eggs',
+              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Leave empty or 0 to always apply the percentage.',
+            style: TextStyle(fontSize: 10, color: kTextMuted),
           ),
         ],
       ],

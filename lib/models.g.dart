@@ -71,13 +71,14 @@ class PartyAdapter extends TypeAdapter<Party> {
       type: fields[8] as PartyType,
       percentageType: fields[9] as String?,
       percentageValue: fields[10] as double? ?? 0.0,
+      percentageMinQuantity: fields[11] as double? ?? 0.0,
     );
   }
 
   @override
   void write(BinaryWriter writer, Party obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -99,7 +100,9 @@ class PartyAdapter extends TypeAdapter<Party> {
       ..writeByte(9)
       ..write(obj.percentageType)
       ..writeByte(10)
-      ..write(obj.percentageValue);
+      ..write(obj.percentageValue)
+      ..writeByte(11)
+      ..write(obj.percentageMinQuantity);
   }
 
   @override

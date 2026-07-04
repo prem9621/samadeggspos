@@ -242,6 +242,24 @@ class _PartyRow extends StatelessWidget {
                 child: Text(p.adjustmentLabel, style: const TextStyle(
                   fontSize: 11.5, fontWeight: FontWeight.w700, color: kTextSub)),
               ),
+              // NEW: quantity pill — the minimum quantity set for this
+              // party (percentageMinQuantity), independent of whether a
+              // percentage is active, so it's always visible here too.
+              if (p.percentageMinQuantity > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: kBlueLight,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Qty ≥${p.percentageMinQuantity.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.w700, color: kBlue),
+                  ),
+                ),
+              ],
               if (isSelected) ...[
                 const SizedBox(width: 8),
                 const Icon(Icons.check_circle_rounded, size: 16, color: kAmber),
@@ -323,6 +341,23 @@ class PartySelectField extends StatelessWidget {
                   child: Text(selected!.adjustmentLabel, style: const TextStyle(
                     fontSize: 11, fontWeight: FontWeight.w700, color: kTextSub)),
                 ),
+                // NEW: quantity chip next to the adjustment chip, shown
+                // whenever this party has a minimum quantity set.
+                if (selected!.percentageMinQuantity > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: kBlueLight,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Qty ≥${selected!.percentageMinQuantity.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w700, color: kBlue),
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 8),
               ],
               const Icon(Icons.chevron_right_rounded, size: 18, color: kTextMuted),

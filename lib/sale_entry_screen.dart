@@ -33,6 +33,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   final _overrideAdjCtrl = TextEditingController();
   String? overridePercType;
   final _overridePercCtrl = TextEditingController();
+  final _overridePercMinQtyCtrl = TextEditingController(); // NEW
   bool _saveAsDefault = false;
   Party? _previewParty; // transient Party built from the override fields above, used only for calculation
 
@@ -48,6 +49,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     _quantityController.addListener(_calculateAmount);
     _overrideAdjCtrl.addListener(_calculateAmount);
     _overridePercCtrl.addListener(_calculateAmount);
+    _overridePercMinQtyCtrl.addListener(_calculateAmount); // NEW
   }
 
   @override
@@ -70,6 +72,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     _notesController.dispose();
     _overrideAdjCtrl.dispose();
     _overridePercCtrl.dispose();
+    _overridePercMinQtyCtrl.dispose(); // NEW
     super.dispose();
   }
 
@@ -108,6 +111,8 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     _overrideAdjCtrl.text = p.adjustmentValue == 0 ? '' : _trimZero(p.adjustmentValue);
     overridePercType = p.percentageType;
     _overridePercCtrl.text = p.percentageValue == 0 ? '' : _trimZero(p.percentageValue);
+    _overridePercMinQtyCtrl.text =
+        p.percentageMinQuantity == 0 ? '' : _trimZero(p.percentageMinQuantity); // NEW
     _saveAsDefault = false;
   }
 
@@ -125,6 +130,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     final qty = double.tryParse(_quantityController.text) ?? 0.0;
     final adjVal = double.tryParse(_overrideAdjCtrl.text) ?? 0.0;
     final percVal = double.tryParse(_overridePercCtrl.text) ?? 0.0;
+    final percMinQty = double.tryParse(_overridePercMinQtyCtrl.text) ?? 0.0; // NEW
 
     // Build a transient Party from the on-screen override values and reuse
     // the exact same calculation methods the model already defines, so the
@@ -136,13 +142,16 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       type: selectedParty!.type,
       percentageType: percVal > 0 ? overridePercType : null,
       percentageValue: percVal,
+      percentageMinQuantity: percMinQty, // NEW
     );
 
     adjustedRate = _previewParty!.calculateAdjustedRate(todayRate!.baseRate);
     amountBeforePercentage = (adjustedRate * qty) / 100;
 
-    if (_previewParty!.hasPercentage) {
-      final breakdown = _previewParty!.getPercentageBreakdown(amountBeforePercentage);
+    // Only apply the percentage if the entered quantity meets the
+    // party's minimum-quantity threshold (0/empty = always applies).
+    if (_previewParty!.percentageActiveForQuantity(qty)) {
+      final breakdown = _previewParty!.getPercentageBreakdown(amountBeforePercentage, qty);
       totalAmount = breakdown['finalAmount'] ?? amountBeforePercentage;
       percentageValue = breakdown['percentageValue'] ?? 0;
     } else {
@@ -174,7 +183,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     final preview = _previewParty ?? selectedParty!;
     final saleRate = preview.calculateAdjustedRate(latestRate.baseRate);
     final baseSaleAmount = (saleRate * qty) / 100;
-    final saleAmount = preview.applyPercentageToAmount(baseSaleAmount);
+    final saleAmount = preview.applyPercentageToAmount(baseSaleAmount, qty); // NEW: pass qty
     final result = await dbHelper.insertSale(
       Sale.now(
         partyKey: selectedParty!.key as int,
@@ -196,6 +205,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       selectedParty!.adjustmentValue = preview.adjustmentValue;
       selectedParty!.percentageType = preview.percentageType;
       selectedParty!.percentageValue = preview.percentageValue;
+      selectedParty!.percentageMinQuantity = preview.percentageMinQuantity; // NEW
       await dbHelper.updateParty(selectedParty!);
     }
 
@@ -213,6 +223,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
         _overrideAdjCtrl.clear();
         overridePercType = null;
         _overridePercCtrl.clear();
+        _overridePercMinQtyCtrl.clear(); // NEW
         _saveAsDefault = false;
         _previewParty = null;
       });
@@ -456,6 +467,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                             overridePercType = v;
                             _calculateAmount();
                           },
+                          percMinQtyCtrl: _overridePercMinQtyCtrl, // NEW
                           saveAsDefault: _saveAsDefault,
                           onSaveAsDefaultChanged: (v) =>
                               setState(() => _saveAsDefault = v),
@@ -481,7 +493,9 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                           amountBeforePercentage: amountBeforePercentage,
                           percentageValue: percentageValue,
                           percentageLabel: _previewParty!.percentageLabel,
-                          hasPercentage: _previewParty!.hasPercentage,
+                          hasPercentage: _previewParty!.percentageActiveForQuantity(
+                            double.tryParse(_quantityController.text) ?? 0.0,
+                          ), // MODIFIED: gate on quantity threshold
                           total: totalAmount,
                         ),
                       ],
@@ -593,6 +607,7 @@ class _RateAdjustmentCard extends StatelessWidget {
   final String? percType;
   final TextEditingController percCtrl;
   final ValueChanged<String?> onPercTypeChanged;
+  final TextEditingController percMinQtyCtrl; // NEW
   final bool saveAsDefault;
   final ValueChanged<bool> onSaveAsDefaultChanged;
   final String actionLabel; // 'sale' or 'purchase'
@@ -605,6 +620,7 @@ class _RateAdjustmentCard extends StatelessWidget {
     required this.percType,
     required this.percCtrl,
     required this.onPercTypeChanged,
+    required this.percMinQtyCtrl, // NEW
     required this.saveAsDefault,
     required this.onSaveAsDefaultChanged,
     required this.actionLabel,
@@ -721,6 +737,23 @@ class _RateAdjustmentCard extends StatelessWidget {
                 suffixText: '%',
                 contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
               ),
+            ),
+            // NEW: Minimum quantity field for this transaction's percentage
+            const SizedBox(height: 8),
+            TextField(
+              controller: percMinQtyCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 12),
+              decoration: const InputDecoration(
+                hintText: 'Minimum quantity (optional)',
+                suffixText: 'eggs',
+                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Leave empty or 0 to always apply the percentage.',
+              style: TextStyle(fontSize: 10, color: kTextMuted),
             ),
           ],
           const SizedBox(height: 10),
