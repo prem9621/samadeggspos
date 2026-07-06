@@ -549,7 +549,7 @@ class _TrendChartCard extends StatelessWidget {
                           dotData: const FlDotData(show: false),
                           belowBarData: BarAreaData(
                             show: true,
-                            color: kBlue.withOpacity(0.08),
+                            color: kBlue.withValues(alpha: 0.08),
                           ),
                         ),
                       ],

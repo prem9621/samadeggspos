@@ -219,8 +219,8 @@ class _PartyStatementScreenState extends State<PartyStatementScreen> {
                                 decoration: BoxDecoration(
                                   color: balance.abs() > 0
                                       ? (balance > 0 ? kGreen : kBlue)
-                                          .withOpacity(0.1)
-                                      : kTextMuted.withOpacity(0.1),
+                                          .withValues(alpha: 0.1)
+                                      : kTextMuted.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Column(
@@ -327,7 +327,7 @@ class _PartyStatementScreenState extends State<PartyStatementScreen> {
                           ...transactions
                               .map((transaction) =>
                                   _buildTransactionCard(transaction))
-                              .toList(),
+                              ,
                         ],
                       ),
                   ],
@@ -388,7 +388,7 @@ class _PartyStatementScreenState extends State<PartyStatementScreen> {
               Expanded(
                 child: _SummaryCard(
                   label: 'Eggs Sold',
-                  value: '${totalEggsSold.toStringAsFixed(0)}',
+                  value: totalEggsSold.toStringAsFixed(0),
                   color: kAmber,
                   icon: Icons.egg_rounded,
                 ),
@@ -433,7 +433,7 @@ class _PartyStatementScreenState extends State<PartyStatementScreen> {
               Expanded(
                 child: _SummaryCard(
                   label: 'Eggs Purchased',
-                  value: '${totalEggsPurchased.toStringAsFixed(0)}',
+                  value: totalEggsPurchased.toStringAsFixed(0),
                   color: kAmber,
                   icon: Icons.egg_rounded,
                 ),
@@ -504,7 +504,7 @@ class _PartyStatementScreenState extends State<PartyStatementScreen> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: getTypeColor(transaction.type).withOpacity(0.1),
+                    color: getTypeColor(transaction.type).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -542,8 +542,7 @@ class _PartyStatementScreenState extends State<PartyStatementScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      (transaction.amount > 0 ? '+' : '') +
-                          '₹${transaction.amount.abs().toStringAsFixed(2)}',
+                      '${transaction.amount > 0 ? '+' : ''}₹${transaction.amount.abs().toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -618,9 +617,9 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'models.dart';
 import 'database_helper.dart';
 import 'party_ledger_screen.dart';
@@ -92,17 +93,11 @@ class _PartiesScreenState extends State<PartiesScreen>
           ? ''
           : party!.adjustmentValue.toString(),
     );
-    // Percentage fields
-    String percType = party?.percentageType ?? 'discount';
-    final percCtrl = TextEditingController(
-      text: (party?.percentageValue ?? 0) == 0 ? '' : party!.percentageValue.toString(),
-    );
-    // NEW: Minimum quantity for percentage to apply
-    final percMinQtyCtrl = TextEditingController(
-      text: (party?.percentageMinQuantity ?? 0) == 0
-          ? ''
-          : party!.percentageMinQuantity.toString(),
-    );
+    // NEW: Advance Payment — only meaningful when creating a brand-new
+    // party (an opening advance). Not shown when editing an existing one,
+    // since re-entering an amount there would create a duplicate payment
+    // every time the party is edited.
+    final advanceCtrl = TextEditingController();
 
     String adjType = party?.adjustmentType ?? '=';
     PartyType pType = party?.type ?? PartyType.customer;
@@ -212,85 +207,37 @@ class _PartiesScreenState extends State<PartiesScreen>
                 ),
                 const SizedBox(height: 14),
 
-                // Percentage Section
-                const Text(
-                  'Percentage Settings (Optional)',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kText),
-                ),
-                const SizedBox(height: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Type',
-                      style: TextStyle(fontSize: 11, color: kTextSub),
+                // NEW: Advance Payment (only for a brand-new party). Shows
+                // whether this will be money we RECEIVED (customer advance)
+                // or PAID (supplier advance) based on the Type chip above.
+                if (party == null) ...[
+                  Text(
+                    pType == PartyType.customer
+                        ? 'Advance Payment (Received from customer)'
+                        : 'Advance Payment (Paid to supplier)',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: kText,
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        ...['discount', 'markup', 'tax'].map((t) {
-                          final selected = percType == t;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: GestureDetector(
-                              onTap: () => setSheet(() => percType = t),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 120),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: selected ? kBlue : kCard,
-                                  borderRadius: BorderRadius.circular(7),
-                                  border: Border.all(
-                                    color: selected ? kBlue : kBorder,
-                                  ),
-                                ),
-                                child: Text(
-                                  t[0].toUpperCase() + t.substring(1),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: selected ? Colors.white : kTextSub,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
+                  ),
+                  const SizedBox(height: 8),
+                  _Field(
+                    controller: advanceCtrl,
+                    label: 'Advance Amount (Optional)',
+                    hint: 'e.g., 5000',
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
                     ),
-                    const SizedBox(height: 8),
-                    _Field(
-                      controller: percCtrl,
-                      label: 'Percentage Value',
-                      hint: 'e.g., 10',
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Leave empty or 0 to disable percentage adjustment',
-                      style: const TextStyle(fontSize: 10, color: kTextMuted),
-                    ),
-                    // NEW: Minimum quantity field
-                    const SizedBox(height: 10),
-                    _Field(
-                      controller: percMinQtyCtrl,
-                      label: 'Minimum Quantity (Optional)',
-                      hint: 'e.g., 500',
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Leave empty or 0 to apply the percentage on every sale, '
-                      'regardless of quantity. Otherwise it only applies when '
-                      'the egg quantity is at least this many.',
-                      style: TextStyle(fontSize: 10, color: kTextMuted),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Leave empty or 0 if there\'s no advance. A payment '
+                    'entry will be created automatically for this amount.',
+                    style: TextStyle(fontSize: 10, color: kTextMuted),
+                  ),
+                  const SizedBox(height: 14),
+                ],
 
                 // Notes
                 _Field(
@@ -313,20 +260,15 @@ class _PartiesScreenState extends State<PartiesScreen>
                         return;
                       }
                       final adjVal = double.tryParse(adjCtrl.text) ?? 0.0;
-                      final percVal = double.tryParse(percCtrl.text) ?? 0.0;
-                      final percMinQty = double.tryParse(percMinQtyCtrl.text) ?? 0.0;
+                      final advanceAmt = party == null
+                          ? (double.tryParse(advanceCtrl.text) ?? 0.0)
+                          : 0.0;
 
-                      // Validate percentage
-                      if (percVal < 0 || percVal > 100) {
+                      if (advanceAmt < 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Percentage must be 0-100')),
-                        );
-                        return;
-                      }
-                      // Validate minimum quantity
-                      if (percMinQty < 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Minimum quantity cannot be negative')),
+                          const SnackBar(
+                            content: Text('Advance amount cannot be negative'),
+                          ),
                         );
                         return;
                       }
@@ -342,9 +284,6 @@ class _PartiesScreenState extends State<PartiesScreen>
                             adjustmentValue: adjVal,
                             notes: _nullIfEmpty(notesCtrl.text),
                             type: pType,
-                            percentageType: percVal > 0 ? percType : null,
-                            percentageValue: percVal,
-                            percentageMinQuantity: percMinQty,
                           ),
                         );
                       } else {
@@ -356,13 +295,28 @@ class _PartiesScreenState extends State<PartiesScreen>
                         party.adjustmentValue = adjVal;
                         party.notes = _nullIfEmpty(notesCtrl.text);
                         party.type = pType;
-                        party.percentageType = percVal > 0 ? percType : null;
-                        party.percentageValue = percVal;
-                        party.percentageMinQuantity = percMinQty;
                         r = await dbHelper.updateParty(party);
                       }
 
                       if (r.success && mounted) {
+                        // NEW: if an advance was entered for a brand-new
+                        // party, create a matching Payment record so it
+                        // shows up in the ledger and balance right away.
+                        if (party == null && advanceAmt > 0 && r.data != null) {
+                          final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+                          await dbHelper.insertPayment(
+                            Payment.now(
+                              partyKey: r.data!.key as int,
+                              date: today,
+                              amount: advanceAmt,
+                              notes: 'Opening advance',
+                              paymentType: pType == PartyType.customer
+                                  ? 'received'
+                                  : 'paid',
+                            ),
+                          );
+                        }
+
                         Navigator.pop(ctx);
                         _load();
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -773,7 +727,10 @@ class _PartyList extends StatelessWidget {
                         ),
                       ),
                     ),
-                  // Percentage badge (type + value only — min qty shown separately below)
+                  // Percentage badge — kept for parties that already had a
+                  // percentage set before this field was removed from the
+                  // form; the underlying Party fields still exist, we just
+                  // no longer collect them here.
                   if (p.hasPercentage)
                     Container(
                       margin: const EdgeInsets.only(right: 6),
@@ -794,9 +751,6 @@ class _PartyList extends StatelessWidget {
                         ),
                       ),
                     ),
-                  // NEW: Quantity badge — shows the minimum quantity set for
-                  // this party, independent of whether percentage is active,
-                  // so it's visible even if only quantity was configured.
                   if (p.percentageMinQuantity > 0)
                     Container(
                       margin: const EdgeInsets.only(right: 6),
