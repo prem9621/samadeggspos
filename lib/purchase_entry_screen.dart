@@ -43,6 +43,11 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   double _percValue = 0.0;
   double _percMinQty = 0.0; // NEW: minimum egg quantity for % to apply
 
+  // NEW: Payment paid right on this screen (e.g. bought 200 eggs on
+  // credit, paid the supplier ₹100 now) — creates a Payment record
+  // alongside the Purchase so the ledger/statement reflect it immediately.
+  final _paymentPaidController = TextEditingController();
+
   bool isLoading = true;
   bool isSaving = false;
   String? error;
@@ -65,6 +70,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     _adjValueController.dispose();
     _percValueController.dispose();
     _percMinQtyController.dispose(); // NEW
+    _paymentPaidController.dispose(); // NEW
     super.dispose();
   }
 
@@ -139,6 +145,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     _percValueController.text = _percValue == 0 ? '' : _percValue.toString();
     _percMinQty = p?.percentageMinQuantity ?? 0.0; // NEW
     _percMinQtyController.text = _percMinQty == 0 ? '' : _percMinQty.toString(); // NEW
+    _paymentPaidController.clear(); // NEW: fresh payment field per supplier/purchase
   }
 
   void _resetToSupplierDefault() {
@@ -273,6 +280,14 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       _snack('Invalid rate for this supplier');
       return;
     }
+
+    // NEW: validate payment paid (if any) before saving anything.
+    final paymentAmt = double.tryParse(_paymentPaidController.text) ?? 0.0;
+    if (paymentAmt < 0) {
+      _snack('Payment paid cannot be negative');
+      return;
+    }
+
     final basePurchaseAmount = (purchaseRate * qty) / 100;
     final purchaseAmount = _applyPercentageFor(basePurchaseAmount, qty); // MODIFIED: pass qty
 
@@ -289,6 +304,21 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       ),
     );
+
+    // NEW: if a payment was paid right now for this purchase (e.g.
+    // bought on credit, paid part now), create a matching Payment record
+    // so the ledger/statement/balance reflect it immediately.
+    if (result.success && paymentAmt > 0) {
+      await dbHelper.insertPayment(
+        Payment.now(
+          partyKey: selectedSupplier!.key as int,
+          date: today,
+          amount: paymentAmt,
+          notes: 'Payment paid against purchase',
+          paymentType: 'paid',
+        ),
+      );
+    }
 
     setState(() => isSaving = false);
     if (result.success) {
@@ -308,6 +338,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
         _percValueController.clear();
         _percMinQty = 0; // NEW
         _percMinQtyController.clear(); // NEW
+        _paymentPaidController.clear(); // NEW
       });
       _snack('Purchase saved!');
     } else {
@@ -506,7 +537,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                       ],
                     ],
                   ),
-                  // NEW: Shows the selected supplier's saved minimum-quantity
+                  // Shows the selected supplier's saved minimum-quantity
                   // setting (same badge style as the Parties list screen) so
                   // it's visible right away after picking a supplier here.
                   if (selectedSupplier != null &&
@@ -599,6 +630,14 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                         _calc();
                       },
                     ),
+                    // NEW: Payment Paid card — same position as the
+                    // Payment Received card on the Sale Entry screen:
+                    // right after the rate/percentage editors, before Notes.
+                    const SizedBox(height: 14),
+                    _PaymentPaidCard(
+                      supplierName: selectedSupplier!.name,
+                      controller: _paymentPaidController,
+                    ),
                   ],
 
                   const SizedBox(height: 14),
@@ -630,6 +669,9 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                         double.tryParse(_qtyCtrl.text) ?? 0.0,
                       ), // MODIFIED: gate on quantity threshold
                       total: totalAmount,
+                      // NEW: shows what will remain due after the
+                      // payment-paid amount is applied.
+                      paymentPaid: double.tryParse(_paymentPaidController.text) ?? 0.0,
                     ),
                   ],
 
@@ -892,6 +934,77 @@ class _PercentageEditor extends StatelessWidget {
   }
 }
 
+/// NEW: "Payment Paid" card — mirror of the Sale Entry screen's Payment
+/// Received card. Lets the owner record how much was actually paid to the
+/// supplier *right now* for this purchase (e.g. bought 200 eggs on
+/// credit, paid ₹100 now). Saving the purchase creates a matching
+/// Payment record automatically, so the ledger/statement instantly show
+/// what's still due.
+class _PaymentPaidCard extends StatelessWidget {
+  final String supplierName;
+  final TextEditingController controller;
+
+  const _PaymentPaidCard({
+    required this.supplierName,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.payments_rounded, size: 14, color: kRed),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Payment Paid (to $supplierName)',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: kText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(fontSize: 13, color: kText),
+            decoration: const InputDecoration(
+              hintText: 'e.g., 100',
+              prefixText: '₹ ',
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Leave empty or 0 if this is a full-credit purchase (nothing '
+            'paid now). Whatever isn\'t paid stays as balance due to this supplier.',
+            style: TextStyle(fontSize: 10, color: kTextMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Shows the base rate, the on-screen adjustment override, and the
 /// resulting rate paid — then the total. Shown as soon as a supplier is
 /// selected so the user always sees the effective rate before entering qty.
@@ -900,6 +1013,7 @@ class _AmountSummary extends StatelessWidget {
   final double amountBeforePercentage, percentageValue;
   final String adjustmentLabel, percentageLabel;
   final bool hasAdjustment, hasPercentage;
+  final double paymentPaid; // NEW
 
   const _AmountSummary({
     required this.baseRate,
@@ -911,10 +1025,13 @@ class _AmountSummary extends StatelessWidget {
     required this.percentageLabel,
     required this.hasPercentage,
     required this.total,
+    this.paymentPaid = 0.0, // NEW
   });
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final due = (total - paymentPaid).clamp(0, double.infinity);
+    return Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: kCard,
@@ -966,9 +1083,32 @@ class _AmountSummary extends StatelessWidget {
             ),
           ],
         ),
+
+        // NEW: shows Paid Now / Balance Due when a payment amount has
+        // been entered on this screen for this purchase.
+        if (paymentPaid > 0) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              children: [
+                _Row('Paid Now', '₹${paymentPaid.toStringAsFixed(2)}'),
+                _Row(
+                  'Balance Due',
+                  due == 0 ? 'Fully Paid' : '₹${due.toStringAsFixed(2)}',
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     ),
   );
+  }
 }
 
 class _Row extends StatelessWidget {

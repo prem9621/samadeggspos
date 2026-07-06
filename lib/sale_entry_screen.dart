@@ -37,6 +37,11 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   bool _saveAsDefault = false;
   Party? _previewParty; // transient Party built from the override fields above, used only for calculation
 
+  // NEW: Payment received right on this screen (e.g. sold 200 eggs on
+  // credit, customer paid ₹100 now) — creates a Payment record alongside
+  // the Sale so the ledger/statement immediately reflect what's still due.
+  final _paymentReceivedCtrl = TextEditingController();
+
   bool isLoading = true;
   bool isSaving = false;
   String? error;
@@ -73,6 +78,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     _overrideAdjCtrl.dispose();
     _overridePercCtrl.dispose();
     _overridePercMinQtyCtrl.dispose(); // NEW
+    _paymentReceivedCtrl.dispose(); // NEW
     super.dispose();
   }
 
@@ -114,6 +120,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     _overridePercMinQtyCtrl.text =
         p.percentageMinQuantity == 0 ? '' : _trimZero(p.percentageMinQuantity); // NEW
     _saveAsDefault = false;
+    _paymentReceivedCtrl.clear(); // NEW: fresh payment field per party/sale
   }
 
   void _calculateAmount() {
@@ -178,6 +185,13 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       return;
     }
 
+    // NEW: validate payment received (if any) before saving anything.
+    final paymentAmt = double.tryParse(_paymentReceivedCtrl.text) ?? 0.0;
+    if (paymentAmt < 0) {
+      _snack('Payment received cannot be negative');
+      return;
+    }
+
     setState(() => isSaving = true);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final preview = _previewParty ?? selectedParty!;
@@ -209,6 +223,21 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
       await dbHelper.updateParty(selectedParty!);
     }
 
+    // NEW: if a payment was received right now for this sale (e.g. sold
+    // on credit, customer paid part now), create a matching Payment
+    // record so the ledger/statement/balance reflect it immediately.
+    if (result.success && paymentAmt > 0) {
+      await dbHelper.insertPayment(
+        Payment.now(
+          partyKey: selectedParty!.key as int,
+          date: today,
+          amount: paymentAmt,
+          notes: 'Payment received against sale',
+          paymentType: 'received',
+        ),
+      );
+    }
+
     setState(() => isSaving = false);
     if (result.success) {
       _quantityController.clear();
@@ -224,6 +253,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
         overridePercType = null;
         _overridePercCtrl.clear();
         _overridePercMinQtyCtrl.clear(); // NEW
+        _paymentReceivedCtrl.clear(); // NEW
         _saveAsDefault = false;
         _previewParty = null;
       });
@@ -364,7 +394,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kSurface,
+      backgroundColor: Colors.transparent,
       body: isLoading
           ? const Center(child: CircularProgressIndicator(color: kAmber))
           : error != null
@@ -473,6 +503,13 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                               setState(() => _saveAsDefault = v),
                           actionLabel: 'sale',
                         ),
+                        // NEW: Payment Received card — sits right below the
+                        // Rate Adjustment card, per the agreed screen order.
+                        const SizedBox(height: 14),
+                        _PaymentReceivedCard(
+                          partyName: selectedParty!.name,
+                          controller: _paymentReceivedCtrl,
+                        ),
                       ],
                       const SizedBox(height: 14),
                       const _SectionLabel('Notes (Optional)'),
@@ -497,6 +534,9 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                             double.tryParse(_quantityController.text) ?? 0.0,
                           ), // MODIFIED: gate on quantity threshold
                           total: totalAmount,
+                          // NEW: shows what will remain due after the
+                          // payment-received amount is applied.
+                          paymentReceived: double.tryParse(_paymentReceivedCtrl.text) ?? 0.0,
                         ),
                       ],
                       const SizedBox(height: 20),
@@ -783,6 +823,76 @@ class _RateAdjustmentCard extends StatelessWidget {
   }
 }
 
+/// NEW: "Payment Received" card — sits below the Rate Adjustment card.
+/// Lets the owner record how much the customer actually paid *right now*
+/// for this sale (e.g. sold 200 eggs on credit, paid ₹100 now). Saving
+/// the sale will create a matching Payment record automatically, so the
+/// ledger/statement instantly show what's still due.
+class _PaymentReceivedCard extends StatelessWidget {
+  final String partyName;
+  final TextEditingController controller;
+
+  const _PaymentReceivedCard({
+    required this.partyName,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.payments_rounded, size: 14, color: kGreen),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Payment Received (from $partyName)',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: kText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(fontSize: 13, color: kText),
+            decoration: const InputDecoration(
+              hintText: 'e.g., 100',
+              prefixText: '₹ ',
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Leave empty or 0 if this is a full-credit sale (nothing paid '
+            'now). Whatever isn\'t paid stays as balance due on this party.',
+            style: TextStyle(fontSize: 10, color: kTextMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PercChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -817,6 +927,7 @@ class _AmountSummary extends StatelessWidget {
   final double amountBeforePercentage, percentageValue;
   final String adjustmentLabel, percentageLabel;
   final bool hasAdjustment, hasPercentage;
+  final double paymentReceived; // NEW
 
   const _AmountSummary({
     required this.baseRate,
@@ -828,10 +939,13 @@ class _AmountSummary extends StatelessWidget {
     required this.percentageLabel,
     required this.hasPercentage,
     required this.total,
+    this.paymentReceived = 0.0, // NEW
   });
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final due = (total - paymentReceived).clamp(0, double.infinity);
+    return Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: kCard,
@@ -884,9 +998,32 @@ class _AmountSummary extends StatelessWidget {
                 ),
               ],
             ),
+
+            // NEW: shows Received / Balance Due when a payment amount has
+            // been entered on this screen for this sale.
+            if (paymentReceived > 0) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  children: [
+                    _Row('Received Now', '₹${paymentReceived.toStringAsFixed(2)}'),
+                    _Row(
+                      'Balance Due',
+                      due == 0 ? 'Fully Paid' : '₹${due.toStringAsFixed(2)}',
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       );
+  }
 }
 
 class _Row extends StatelessWidget {
