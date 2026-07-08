@@ -306,23 +306,66 @@ class _MainScreenState extends State<MainScreen> {
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // NEW: back-button handling. On any non-Home tab, back should return to
+  // Home first instead of exiting the app. On Home, a second back press
+  // within 2 seconds actually exits — avoids accidental app closure.
+  DateTime? _lastBackPress;
+
+  void _handleBack(AppState appState) {
+    if (appState.selectedIndex != 0) {
+      appState.setSelectedIndex(0);
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastBackPress == null || now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
+      _lastBackPress = now;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Press back again to exit', style: TextStyle(fontSize: 12)),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    SystemNavigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final idx = context.watch<AppState>().selectedIndex;
+    final appState = context.watch<AppState>();
+    final idx = appState.selectedIndex;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: _buildAppBar(idx, theme, isDark),
-      drawer: _buildDrawer(idx, theme, isDark),
-      // Stack lets a faint logo watermark sit behind every screen without
-      // touching each screen's own file — added once, applies everywhere.
-      body: Stack(
-        children: [
-          const AppWatermark(),
-          IndexedStack(index: idx, children: _screens),
-        ],
+    return PopScope(
+      // We always intercept back ourselves (canPop: false) so we can
+      // decide between "go to Home" vs "actually exit" — see _handleBack.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack(appState);
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: _buildAppBar(idx, theme, isDark),
+        drawer: _buildDrawer(idx, theme, isDark),
+        // Stack lets a faint logo watermark sit behind every screen without
+        // touching each screen's own file — added once, applies everywhere.
+        body: Stack(
+          children: [
+            const _BackgroundWatermark(),
+            IndexedStack(index: idx, children: _screens),
+          ],
+        ),
+        // NEW: Quick "New Sale" shortcut — only shown on the Home tab so it
+        // never collides with a screen's own FAB (e.g. Parties' Add Party).
+        floatingActionButton: idx == 0
+            ? FloatingActionButton.extended(
+                onPressed: () => appState.setSelectedIndex(3),
+                icon: const Icon(Icons.point_of_sale_rounded),
+                label: const Text('New Sale'),
+              )
+            : null,
       ),
     );
   }
@@ -506,14 +549,11 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-/// Faint, oversized logo centered behind screen content — a subtle
-/// brand watermark. Public (not private to main.dart) so any screen
-/// opened via Navigator.push — which gets its own Scaffold outside
-/// MainScreen's Stack — can wrap its own body with this too and get
-/// the same watermark. Uses IgnorePointer so it never blocks taps,
+/// Faint, oversized logo centered behind every screen's content — a
+/// subtle brand watermark. Uses IgnorePointer so it never blocks taps,
 /// and very low opacity so it never competes with real UI text/cards.
-class AppWatermark extends StatelessWidget {
-  const AppWatermark({super.key});
+class _BackgroundWatermark extends StatelessWidget {
+  const _BackgroundWatermark();
 
   @override
   Widget build(BuildContext context) {
