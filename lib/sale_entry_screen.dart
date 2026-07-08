@@ -668,7 +668,7 @@ class _RateAdjustmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const adjModes = ['=', '+', '-', '+%', '-%'];
+    const adjModes = ['=', '+', '-'];
     const percTypes = <String, String>{
       'discount': 'Discount',
       'markup': 'Markup',

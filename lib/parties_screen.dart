@@ -496,7 +496,7 @@ class _RateAdjRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const modes = ['=', '+', '-', '+%', '-%'];
+    const modes = ['=', '+', '-'];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

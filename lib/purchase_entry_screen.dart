@@ -787,7 +787,7 @@ class _AdjustmentEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const modes = ['=', '+', '-', '+%', '-%'];
+    const modes = ['=', '+', '-'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
