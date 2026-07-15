@@ -400,7 +400,6 @@ class _PartiesScreenState extends State<PartiesScreen>
             tabs: const [
               Tab(text: 'All'),
               Tab(text: 'Customers'),
-              Tab(text: 'Suppliers'),
             ],
           ),
           Container(height: 1, color: kBorder),
@@ -848,7 +847,7 @@ class _TypeChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected ? kBlue : kCard,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: selected ? kBlue : kBorder),
+        border: Border.all(color: selected ? const Color.fromRGBO(37, 99, 235, 1) : kBorder),
       ),
       child: Text(
         label,
