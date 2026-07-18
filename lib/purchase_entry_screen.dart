@@ -47,6 +47,10 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
   // credit, paid the supplier ₹100 now) — creates a Payment record
   // alongside the Purchase so the ledger/statement reflect it immediately.
   final _paymentPaidController = TextEditingController();
+  // NEW: date + notes for the payment itself — matches the Add Payment
+  // dialog on the Party Ledger screen (date picker, optional notes).
+  DateTime _paymentDate = DateTime.now();
+  final _paymentNotesController = TextEditingController();
 
   bool isLoading = true;
   bool isSaving = false;
@@ -71,6 +75,7 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     _percValueController.dispose();
     _percMinQtyController.dispose(); // NEW
     _paymentPaidController.dispose(); // NEW
+    _paymentNotesController.dispose(); // NEW
     super.dispose();
   }
 
@@ -146,6 +151,8 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
     _percMinQty = p?.percentageMinQuantity ?? 0.0; // NEW
     _percMinQtyController.text = _percMinQty == 0 ? '' : _percMinQty.toString(); // NEW
     _paymentPaidController.clear(); // NEW: fresh payment field per supplier/purchase
+    _paymentDate = DateTime.now(); // NEW
+    _paymentNotesController.clear(); // NEW
   }
 
   void _resetToSupplierDefault() {
@@ -312,9 +319,11 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       await dbHelper.insertPayment(
         Payment.now(
           partyKey: selectedSupplier!.key as int,
-          date: today,
+          date: DateFormat('yyyy-MM-dd').format(_paymentDate),
           amount: paymentAmt,
-          notes: 'Payment paid against purchase',
+          notes: _paymentNotesController.text.trim().isEmpty
+              ? 'Payment paid against purchase'
+              : _paymentNotesController.text.trim(),
           paymentType: 'paid',
         ),
       );
@@ -339,6 +348,8 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
         _percMinQty = 0; // NEW
         _percMinQtyController.clear(); // NEW
         _paymentPaidController.clear(); // NEW
+        _paymentDate = DateTime.now(); // NEW
+        _paymentNotesController.clear(); // NEW
       });
       _snack('Purchase saved!');
     } else {
@@ -637,6 +648,9 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
                     _PaymentPaidCard(
                       supplierName: selectedSupplier!.name,
                       controller: _paymentPaidController,
+                      paymentDate: _paymentDate,
+                      onDateChanged: (d) => setState(() => _paymentDate = d),
+                      notesController: _paymentNotesController,
                     ),
                   ],
 
@@ -943,11 +957,27 @@ class _PercentageEditor extends StatelessWidget {
 class _PaymentPaidCard extends StatelessWidget {
   final String supplierName;
   final TextEditingController controller;
+  final DateTime paymentDate;
+  final ValueChanged<DateTime> onDateChanged;
+  final TextEditingController notesController;
 
   const _PaymentPaidCard({
     required this.supplierName,
     required this.controller,
+    required this.paymentDate,
+    required this.onDateChanged,
+    required this.notesController,
   });
+
+  Future<void> _pickDate(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: paymentDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) onDateChanged(picked);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -984,6 +1014,32 @@ class _PaymentPaidCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          // NEW: date picker row — same style as the Party Ledger's Add
+          // Payment sheet, so a backdated payment can be recorded here too.
+          GestureDetector(
+            onTap: () => _pickDate(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: kSurface,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: kBorder),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today_rounded, size: 13, color: kRed),
+                  const SizedBox(width: 9),
+                  Text(
+                    DateFormat('d MMM yyyy').format(paymentDate),
+                    style: const TextStyle(fontSize: 12.5, color: kText),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right_rounded, size: 15, color: kTextMuted),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -998,6 +1054,18 @@ class _PaymentPaidCard extends StatelessWidget {
             'Leave empty or 0 if this is a full-credit purchase (nothing '
             'paid now). Whatever isn\'t paid stays as balance due to this supplier.',
             style: TextStyle(fontSize: 10, color: kTextMuted),
+          ),
+          // NEW: optional notes for this payment specifically (separate
+          // from the purchase's own Notes field further down the screen).
+          const SizedBox(height: 10),
+          TextField(
+            controller: notesController,
+            maxLines: 2,
+            style: const TextStyle(fontSize: 12, color: kText),
+            decoration: const InputDecoration(
+              labelText: 'Payment Notes (Optional)',
+              hintText: 'e.g., Paid via UPI',
+            ),
           ),
         ],
       ),

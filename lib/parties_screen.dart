@@ -25,7 +25,13 @@ class _PartiesScreenState extends State<PartiesScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    // FIX: Suppliers tab removed — only All / Customers remain now, so
+    // the controller length must match the 2 tabs below (it was still 3,
+    // which crashes with "controller.length != tabs.length"). Suppliers
+    // are still saved normally (via Purchase Entry's inline Add Supplier,
+    // or by picking "Supplier" type here) — they just show up under "All"
+    // instead of having their own dedicated tab.
+    _tabCtrl = TabController(length: 2, vsync: this);
     _load();
   }
 
@@ -345,6 +351,217 @@ class _PartiesScreenState extends State<PartiesScreen>
 
   String? _nullIfEmpty(String s) => s.trim().isEmpty ? null : s.trim();
 
+  /// NEW: Quick "Add Payment" popup, reachable directly from a party row
+  /// on this screen — same date/type/amount/notes fields as the Party
+  /// Ledger screen's Add Payment sheet, but without needing to open the
+  /// ledger first.
+  Future<void> _showQuickPaymentDialog(Party party) async {
+    final amountController = TextEditingController();
+    final notesController = TextEditingController();
+    String paymentType = party.type == PartyType.customer ? 'received' : 'paid';
+    DateTime selectedDate = DateTime.now();
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Container(
+          decoration: const BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: kBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Add Payment · ${party.name}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: kText,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Date picker row
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setSheet(() => selectedDate = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: kSurface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: kBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 14,
+                          color: kAmber,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          DateFormat('d MMM yyyy').format(selectedDate),
+                          style: const TextStyle(fontSize: 13, color: kText),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color: kTextMuted,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                const Text(
+                  'Payment Type',
+                  style: TextStyle(fontSize: 11.5, color: kTextSub),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ChoiceChip(
+                        label: 'Received',
+                        selected: paymentType == 'received',
+                        onTap: () => setSheet(() => paymentType = 'received'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ChoiceChip(
+                        label: 'Paid',
+                        selected: paymentType == 'paid',
+                        onTap: () => setSheet(() => paymentType = 'paid'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: amountController,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: kAmber,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Amount',
+                    prefixText: '₹ ',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: notesController,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (Optional)',
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final amount = double.tryParse(amountController.text);
+                      final notes = notesController.text.trim().isEmpty
+                          ? null
+                          : notesController.text.trim();
+
+                      if (amount == null || amount <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter a valid amount'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      final dateStr = DateFormat(
+                        'yyyy-MM-dd',
+                      ).format(selectedDate);
+                      final newPayment = Payment.now(
+                        partyKey: party.key as int,
+                        date: dateStr,
+                        amount: amount,
+                        notes: notes,
+                        paymentType: paymentType,
+                      );
+                      final result = await dbHelper.insertPayment(newPayment);
+                      if (result.success) {
+                        if (mounted) {
+                          Navigator.pop(ctx);
+                          _load();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Payment added')),
+                          );
+                        }
+                      } else {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                result.error ?? 'Failed to add payment',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text('Save Payment'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -416,12 +633,18 @@ class _PartiesScreenState extends State<PartiesScreen>
                 : TabBarView(
                     controller: _tabCtrl,
                     children: [
+                      // "All" — includes both customers AND suppliers
+                      // (suppliers no longer have their own tab, but any
+                      // party saved with Type=Supplier, whether from here
+                      // or from Purchase Entry's inline Add Supplier,
+                      // still shows up here).
                       _PartyList(
                         parties: _filtered(null),
                         balances: balances,
                         onTap: _goLedger,
                         onEdit: _showPartyDialog,
                         onDelete: _deleteParty,
+                        onPayment: _showQuickPaymentDialog,
                       ),
                       _PartyList(
                         parties: _filtered(PartyType.customer),
@@ -429,13 +652,7 @@ class _PartiesScreenState extends State<PartiesScreen>
                         onTap: _goLedger,
                         onEdit: _showPartyDialog,
                         onDelete: _deleteParty,
-                      ),
-                      _PartyList(
-                        parties: _filtered(PartyType.supplier),
-                        balances: balances,
-                        onTap: _goLedger,
-                        onEdit: _showPartyDialog,
-                        onDelete: _deleteParty,
+                        onPayment: _showQuickPaymentDialog,
                       ),
                     ],
                   ),
@@ -577,6 +794,7 @@ class _PartyList extends StatelessWidget {
   final ValueChanged<Party> onTap;
   final ValueChanged<Party> onEdit;
   final ValueChanged<Party> onDelete;
+  final ValueChanged<Party> onPayment;
 
   const _PartyList({
     required this.parties,
@@ -584,6 +802,7 @@ class _PartyList extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    required this.onPayment,
   });
 
   @override
@@ -770,6 +989,19 @@ class _PartyList extends StatelessWidget {
                         ),
                       ),
                     ),
+                  // NEW: quick Add Payment icon — opens the payment popup
+                  // directly from this row, no need to open the Ledger.
+                  InkWell(
+                    onTap: () => onPayment(p),
+                    child: const Padding(
+                      padding: EdgeInsets.all(5),
+                      child: Icon(
+                        Icons.payments_rounded,
+                        size: 14,
+                        color: kGreen,
+                      ),
+                    ),
+                  ),
                   InkWell(
                     onTap: () => onEdit(p),
                     child: const Padding(
@@ -853,6 +1085,43 @@ class _TypeChip extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: selected ? Colors.white : kTextSub,
+        ),
+      ),
+    ),
+  );
+}
+
+/// Simple two-way toggle chip used in the quick Add Payment popup
+/// (Received / Paid) — same visual style as the one in the Party Ledger
+/// screen's own Add Payment sheet.
+class _ChoiceChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ChoiceChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: selected ? kAmber : kSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: selected ? kAmber : kBorder),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12.5,
           fontWeight: FontWeight.w600,
           color: selected ? Colors.white : kTextSub,
         ),

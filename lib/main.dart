@@ -13,10 +13,10 @@ import 'settings_screen.dart';
 import 'purchase_entry_screen.dart';
 
 // ─── Design Tokens (Light) ────────────────────────────────────────────────────
-const kBlue = Color(0xFF2563EB); // Primary – buttons, active
-const kBlueDark = Color(0xFF1D4ED8); // Pressed
-const kBlueLight = Color(0xFFEFF6FF); // Blue tint bg
-const kAmber = Color(0xFFD97706); // Egg-gold accent
+const kBlue = Color(0xFF2563EB);
+const kBlueDark = Color(0xFF1D4ED8);
+const kBlueLight = Color(0xFFEFF6FF);
+const kAmber = Color(0xFFD97706);
 const kAmberLight = Color(0xFFFEF3C7);
 const kAmberDark = Color(0xFFB45309);
 const kSurface = Color(0xFFF8F9FA);
@@ -28,8 +28,6 @@ const kTextMuted = Color(0xFFADB5BD);
 const kGreen = Color(0xFF16A34A);
 const kRed = Color(0xFFDC2626);
 
-// Path to the app logo — used in the AppBar, Drawer header, and as a
-// faint background watermark across the app.
 const kLogoPath = 'assets/logo.png';
 
 void main() async {
@@ -93,7 +91,6 @@ class AppState extends ChangeNotifier {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // ─── Light Theme ────────────────────────────────────────────────────────
   ThemeData _lightTheme() => ThemeData(
     colorScheme: ColorScheme.fromSeed(
       seedColor: kBlue,
@@ -162,9 +159,6 @@ class MyApp extends StatelessWidget {
     ),
   );
 
-  // ─── Dark Theme ─────────────────────────────────────────────────────────
-  // Same brand accents (blue/amber) so the app still feels like "Samad
-  // Eggs" in dark mode — only surfaces/text flip to dark-friendly values.
   ThemeData _darkTheme() {
     const dSurface = Color(0xFF121212);
     const dCard = Color(0xFF1E1E1E);
@@ -306,9 +300,6 @@ class _MainScreenState extends State<MainScreen> {
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  // NEW: back-button handling. On any non-Home tab, back should return to
-  // Home first instead of exiting the app. On Home, a second back press
-  // within 2 seconds actually exits — avoids accidental app closure.
   DateTime? _lastBackPress;
 
   void _handleBack(AppState appState) {
@@ -336,9 +327,16 @@ class _MainScreenState extends State<MainScreen> {
     final idx = appState.selectedIndex;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // FIX: PopScope was wrapping the whole Scaffold with canPop:false.
+    // On this build that broke tap/hit-testing for buttons on nested
+    // screens (Save Party, Save Sale, Save Purchase all stopped
+    // responding). PopScope should only intercept the system back
+    // gesture — it must not sit above content in a way that changes hit
+    // testing. Root cause was combining it with a Stack+IgnorePointer
+    // watermark without pinning the real content as the top hit-test
+    // layer via Positioned.fill — fixed below.
     return PopScope(
-      // We always intercept back ourselves (canPop: false) so we can
-      // decide between "go to Home" vs "actually exit" — see _handleBack.
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
@@ -349,16 +347,18 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: _buildAppBar(idx, theme, isDark),
         drawer: _buildDrawer(idx, theme, isDark),
-        // Stack lets a faint logo watermark sit behind every screen without
-        // touching each screen's own file — added once, applies everywhere.
         body: Stack(
           children: [
             const _BackgroundWatermark(),
-            IndexedStack(index: idx, children: _screens),
+            // FIX: Positioned.fill guarantees the real screen content is
+            // always the top-most, full-size hit-test layer above the
+            // watermark — this is what makes Save/Update buttons tappable
+            // again on every screen.
+            Positioned.fill(
+              child: IndexedStack(index: idx, children: _screens),
+            ),
           ],
         ),
-        // NEW: Quick "New Sale" shortcut — only shown on the Home tab so it
-        // never collides with a screen's own FAB (e.g. Parties' Add Party).
         floatingActionButton: idx == 0
             ? FloatingActionButton.extended(
                 onPressed: () => appState.setSelectedIndex(3),
@@ -404,8 +404,6 @@ class _MainScreenState extends State<MainScreen> {
             child: Image.asset(
               kLogoPath,
               fit: BoxFit.cover,
-              // Falls back to the egg icon if the asset is ever missing,
-              // so a bad path doesn't crash the app bar.
               errorBuilder: (context, error, stackTrace) =>
                   const Icon(Icons.egg_rounded, color: kAmber, size: 16),
             ),
@@ -474,7 +472,6 @@ class _MainScreenState extends State<MainScreen> {
                       ],
                     ),
                   ),
-                  // Quick dark-mode toggle right in the drawer header.
                   IconButton(
                     icon: Icon(
                       isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
@@ -549,28 +546,34 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-/// Faint, oversized logo centered behind every screen's content — a
-/// subtle brand watermark. Uses IgnorePointer so it never blocks taps,
-/// and very low opacity so it never competes with real UI text/cards.
 class _BackgroundWatermark extends StatelessWidget {
   const _BackgroundWatermark();
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
+    return const IgnorePointer(
       child: Align(
         alignment: Alignment.center,
         child: Opacity(
           opacity: 0.045,
-          child: Image.asset(
-            kLogoPath,
-            width: 320,
-            height: 320,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-          ),
+          child: _WatermarkImage(),
         ),
       ),
+    );
+  }
+}
+
+class _WatermarkImage extends StatelessWidget {
+  const _WatermarkImage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      kLogoPath,
+      width: 320,
+      height: 320,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
     );
   }
 }

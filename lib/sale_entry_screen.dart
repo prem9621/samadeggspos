@@ -41,6 +41,11 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
   // credit, customer paid ₹100 now) — creates a Payment record alongside
   // the Sale so the ledger/statement immediately reflect what's still due.
   final _paymentReceivedCtrl = TextEditingController();
+  // NEW: date + notes for the payment itself (separate from the sale's
+  // own Notes field below) — matches the Add Payment dialog on the
+  // Party Ledger screen (date picker, optional notes).
+  DateTime _paymentDate = DateTime.now();
+  final _paymentNotesCtrl = TextEditingController();
 
   bool isLoading = true;
   bool isSaving = false;
@@ -79,6 +84,7 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     _overridePercCtrl.dispose();
     _overridePercMinQtyCtrl.dispose(); // NEW
     _paymentReceivedCtrl.dispose(); // NEW
+    _paymentNotesCtrl.dispose(); // NEW
     super.dispose();
   }
 
@@ -121,6 +127,8 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
         p.percentageMinQuantity == 0 ? '' : _trimZero(p.percentageMinQuantity); // NEW
     _saveAsDefault = false;
     _paymentReceivedCtrl.clear(); // NEW: fresh payment field per party/sale
+    _paymentDate = DateTime.now(); // NEW
+    _paymentNotesCtrl.clear(); // NEW
   }
 
   void _calculateAmount() {
@@ -227,12 +235,16 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
     // on credit, customer paid part now), create a matching Payment
     // record so the ledger/statement/balance reflect it immediately.
     if (result.success && paymentAmt > 0) {
+      final paymentDateStr = DateFormat('yyyy-MM-dd').format(_paymentDate);
+      final paymentNotes = _paymentNotesCtrl.text.trim().isEmpty
+          ? 'Payment received against sale'
+          : _paymentNotesCtrl.text.trim();
       await dbHelper.insertPayment(
         Payment.now(
           partyKey: selectedParty!.key as int,
-          date: today,
+          date: paymentDateStr,
           amount: paymentAmt,
-          notes: 'Payment received against sale',
+          notes: paymentNotes,
           paymentType: 'received',
         ),
       );
@@ -254,6 +266,8 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
         _overridePercCtrl.clear();
         _overridePercMinQtyCtrl.clear(); // NEW
         _paymentReceivedCtrl.clear(); // NEW
+        _paymentDate = DateTime.now(); // NEW
+        _paymentNotesCtrl.clear(); // NEW
         _saveAsDefault = false;
         _previewParty = null;
       });
@@ -509,6 +523,9 @@ class _SaleEntryScreenState extends State<SaleEntryScreen> {
                         _PaymentReceivedCard(
                           partyName: selectedParty!.name,
                           controller: _paymentReceivedCtrl,
+                          paymentDate: _paymentDate,
+                          onDateChanged: (d) => setState(() => _paymentDate = d),
+                          notesController: _paymentNotesCtrl,
                         ),
                       ],
                       const SizedBox(height: 14),
@@ -831,11 +848,27 @@ class _RateAdjustmentCard extends StatelessWidget {
 class _PaymentReceivedCard extends StatelessWidget {
   final String partyName;
   final TextEditingController controller;
+  final DateTime paymentDate;
+  final ValueChanged<DateTime> onDateChanged;
+  final TextEditingController notesController;
 
   const _PaymentReceivedCard({
     required this.partyName,
     required this.controller,
+    required this.paymentDate,
+    required this.onDateChanged,
+    required this.notesController,
   });
+
+  Future<void> _pickDate(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: paymentDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) onDateChanged(picked);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -872,6 +905,32 @@ class _PaymentReceivedCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          // NEW: date picker row — same style as the Party Ledger's Add
+          // Payment sheet, so a backdated payment can be recorded here too.
+          GestureDetector(
+            onTap: () => _pickDate(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: kSurface,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: kBorder),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today_rounded, size: 13, color: kGreen),
+                  const SizedBox(width: 9),
+                  Text(
+                    DateFormat('d MMM yyyy').format(paymentDate),
+                    style: const TextStyle(fontSize: 12.5, color: kText),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right_rounded, size: 15, color: kTextMuted),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -886,6 +945,18 @@ class _PaymentReceivedCard extends StatelessWidget {
             'Leave empty or 0 if this is a full-credit sale (nothing paid '
             'now). Whatever isn\'t paid stays as balance due on this party.',
             style: TextStyle(fontSize: 10, color: kTextMuted),
+          ),
+          // NEW: optional notes for this payment specifically (separate
+          // from the sale's own Notes field further down the screen).
+          const SizedBox(height: 10),
+          TextField(
+            controller: notesController,
+            maxLines: 2,
+            style: const TextStyle(fontSize: 12, color: kText),
+            decoration: const InputDecoration(
+              labelText: 'Payment Notes (Optional)',
+              hintText: 'e.g., Paid via UPI',
+            ),
           ),
         ],
       ),
